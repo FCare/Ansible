@@ -29,6 +29,24 @@ http:
         burst: 50
 
   routers:
+    # TTS Service - Unmute Talk
+    unmute-talk:
+      rule: "Host(`unmute-talk.caronboulme.fr`)"
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: letsencrypt
+      service: tts-service
+
+    # STT Service - Unmute Transcript
+    unmute-transcript:
+      rule: "Host(`unmute-transcript.caronboulme.fr`)"
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: letsencrypt
+      service: stt-service
+
     # Immich - Photo Management
     immich:
       rule: "Host(`photos.caronboulme.fr`)"
@@ -39,6 +57,17 @@ http:
       service: immich-service
 
   services:
+    # Unmute Services
+    tts-service:
+      loadBalancer:
+        servers:
+          - url: "http://tts:8080"
+
+    stt-service:
+      loadBalancer:
+        servers:
+          - url: "http://stt:8080"
+
     # Immich Service
     immich-service:
       loadBalancer:
