@@ -19,7 +19,6 @@ import uvicorn
 
 # Configuration
 DB_PATH = os.getenv("VK_DB_PATH", "/data/voight-kampff.db")
-SECRET_KEY = os.getenv("VK_SECRET_KEY", "change-this-secret-key-for-production")
 DATABASE_URL = f"sqlite+aiosqlite:///{DB_PATH}"
 
 # Database Models

@@ -44,7 +44,6 @@ services:
     environment:
       - TZ=Europe/Paris
       - VK_DB_PATH=/data/voight-kampff.db
-      - VK_SECRET_KEY=${VK_SECRET_KEY:-change-this-secret-key-for-production}
     volumes:
       - ./voight-kampff/data:/data
       - ./voight-kampff/config:/config
@@ -54,53 +53,6 @@ services:
       - "traefik.http.routers.vk.entrypoints=websecure"
       - "traefik.http.routers.vk.tls.certresolver=letsencrypt"
       - "traefik.http.services.vk.loadbalancer.server.port=8080"
-
-  # Immich - Photo Management (with its own auth)
-  immich:
-    image: ghcr.io/immich-app/immich-server:release
-    container_name: ansible-immich
-    restart: unless-stopped
-    networks:
-      - ansible
-    volumes:
-      - ./immich/upload:/usr/src/app/upload
-      - /etc/localtime:/etc/localtime:ro
-    environment:
-      DB_HOSTNAME: immich-postgres
-      DB_USERNAME: immich
-      DB_PASSWORD: ${IMMICH_DB_PASSWORD:-changeme}
-      DB_DATABASE_NAME: immich
-      REDIS_HOSTNAME: immich-redis
-      TZ: Europe/Paris
-    depends_on:
-      - immich-postgres
-      - immich-redis
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.immich.rule=Host(`photos.mon_url.com`)"
-      - "traefik.http.routers.immich.entrypoints=websecure"
-      - "traefik.http.routers.immich.tls.certresolver=letsencrypt"
-      - "traefik.http.services.immich.loadbalancer.server.port=3001"
-
-  immich-postgres:
-    image: tensorchord/pgvecto-rs:pg16-v0.2.0
-    container_name: ansible-immich-postgres
-    restart: unless-stopped
-    networks:
-      - ansible
-    environment:
-      POSTGRES_USER: immich
-      POSTGRES_PASSWORD: ${IMMICH_DB_PASSWORD:-changeme}
-      POSTGRES_DB: immich
-    volumes:
-      - ./immich/postgres:/var/lib/postgresql/data
-
-  immich-redis:
-    image: redis:alpine
-    container_name: ansible-immich-redis
-    restart: unless-stopped
-    networks:
-      - ansible
 
   # TTS Service - Text-to-Speech (protected by API key)
   tts-service:

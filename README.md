@@ -12,34 +12,28 @@
                                         │
                     ┌───────────────────┼───────────────────┐
                     │                   │                   │
-          ┌─────────▼──────┐   ┌───────▼───────┐   ┌──────▼──────┐
-          │ Voight-Kampff  │   │     Immich     │   │  TTS/STT/   │
-          │  (Auth Service) │   │   (Photos)     │   │  LLM/Asst   │
-          └────────────────┘   └────────────────┘   └─────────────┘
-               API Keys         Own Auth System      Protected by VK
+          ┌─────────▼──────┐                       ┌──────▼──────┐
+          │ Voight-Kampff  │                       │  TTS/STT/   │
+          │  (Auth Service) │                       │  LLM/Asst   │
+          └────────────────┘                       └─────────────┘
+               API Keys                             Protected by VK
 ```
 
 ### Services
 
 1. **Traefik** (`traefik.mon_url.com`) - Reverse proxy with automatic HTTPS
 2. **Voight-Kampff** (`auth.mon_url.com`) - API Key authentication service
-3. **Immich** (`photos.mon_url.com`) - Photo management (uses built-in auth)
-4. **TTS Service** (`tts.mon_url.com`) - Text-to-Speech (protected by API keys)
-5. **STT Service** (`stt.mon_url.com`) - Speech-to-Text (protected by API keys)
-6. **LLM Service** (`llm.mon_url.com`) - Language Model (protected by API keys)
-7. **Assistant Backend** (`assistant.mon_url.com`) - Assistant API (protected by API keys)
+3. **TTS Service** (`tts.mon_url.com`) - Text-to-Speech (protected by API keys)
+4. **STT Service** (`stt.mon_url.com`) - Speech-to-Text (protected by API keys)
+5. **LLM Service** (`llm.mon_url.com`) - Language Model (protected by API keys)
+6. **Assistant Backend** (`assistant.mon_url.com`) - Assistant API (protected by API keys)
 
 ## 🔐 Authentication Strategy
 
-### Immich
-- Uses its **own authentication system**
-- No additional API key layer
-- Compatible with the Immich Android app out of the box
-
-### Other Services (TTS, STT, LLM, Assistant)
-- Protected by **Voight-Kampff** API key authentication
+All services (TTS, STT, LLM, Assistant) are protected by **Voight-Kampff** API key authentication:
 - Fine-grained access control per service
 - Multiple API keys with different scopes
+- Bearer token authentication via HTTP headers
 
 ## 🚀 Getting Started
 
@@ -56,37 +50,25 @@
    cd ansible
    ```
 
-2. **Configure environment variables**
+2. **Update Traefik email for Let's Encrypt certificates**
    ```bash
-   cp .env.example .env
-   nano .env
+   nano traefik/traefik.yml
+   # Change line 33: email: your-email@example.com
    ```
-   
-   Update:
-   - `LETSENCRYPT_EMAIL` - Your email for Let's Encrypt
-   - `VK_SECRET_KEY` - Generate a random secret (min 32 chars)
-   - `IMMICH_DB_PASSWORD` - Strong password for Immich database
-   - Replace `mon_url.com` with your actual domain in `docker-compose.yml`
 
 3. **Update your domain in docker-compose.yml**
    ```bash
    sed -i 's/mon_url.com/yourdomain.com/g' docker-compose.yml
    ```
 
-4. **Update Traefik email**
-   ```bash
-   nano traefik/traefik.yml
-   # Change: email: your-email@example.com
-   ```
-
-5. **Create required directories and set permissions**
+4. **Create required directories and set permissions**
    ```bash
    mkdir -p traefik/logs
    touch traefik/acme.json
    chmod 600 traefik/acme.json
    ```
 
-6. **Update your service images**
+5. **Update your service images**
    Edit `docker-compose.yml` and replace:
    - `your-tts-image:latest`
    - `your-stt-image:latest`
@@ -95,12 +77,12 @@
    
    With your actual Docker images.
 
-7. **Start the services**
+6. **Start the services**
    ```bash
    docker-compose up -d
    ```
 
-8. **Check logs**
+7. **Check logs**
    ```bash
    docker-compose logs -f
    ```
@@ -229,7 +211,6 @@ docker-compose logs -f
 # Specific service
 docker-compose logs -f traefik
 docker-compose logs -f voight-kampff
-docker-compose logs -f immich
 
 # Traefik access logs
 tail -f traefik/logs/access.log
@@ -258,9 +239,6 @@ docker-compose up -d
 # Backup Voight-Kampff database (API keys)
 cp voight-kampff/data/voight-kampff.db voight-kampff.db.backup
 
-# Backup Immich data
-tar -czf immich-backup.tar.gz immich/
-
 # Backup Traefik certificates
 cp traefik/acme.json acme.json.backup
 ```
@@ -288,10 +266,6 @@ cp traefik/acme.json acme.json.backup
 3. Check Traefik dashboard: `https://traefik.mon_url.com`
 4. Review Traefik logs: `docker-compose logs traefik`
 
-### Immich App Connection Issues
-
-Immich uses its own authentication - **do NOT add API keys**. Use the credentials created in Immich's web interface.
-
 ## 📊 Network Details
 
 - **Network Name:** `ansible`
@@ -301,19 +275,18 @@ Immich uses its own authentication - **do NOT add API keys**. Use the credential
 
 ## 🔐 Security Recommendations
 
-1. **Change all default passwords** in `.env`
-2. **Use strong API keys** (automatically generated)
-3. **Set expiration dates** for temporary access
-4. **Regularly review** active API keys
-5. **Enable firewall** to only allow ports 80/443
-6. **Keep services updated** with `docker-compose pull`
-7. **Monitor access logs** regularly
-8. **Backup** the Voight-Kampff database
+1. **Use strong API keys** (automatically generated by Voight-Kampff)
+2. **Set expiration dates** for temporary access
+3. **Regularly review** active API keys
+4. **Enable firewall** to only allow ports 80/443
+5. **Keep services updated** with `docker-compose pull`
+6. **Monitor access logs** regularly
+7. **Backup** the Voight-Kampff database
+8. **Change Traefik dashboard authentication** in `traefik/dynamic.yml`
 
 ## 📚 References
 
 - [Traefik Documentation](https://doc.traefik.io/traefik/)
-- [Immich Documentation](https://immich.app/docs/overview/introduction)
 - [Let's Encrypt](https://letsencrypt.org/)
 
 ---
