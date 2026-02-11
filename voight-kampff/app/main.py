@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy import String, DateTime, Boolean, Text, select
+from sqlalchemy import String, DateTime, Boolean, Text, Integer, select
 from passlib.context import CryptContext
 from itsdangerous import URLSafeTimedSerializer
 import uvicorn
@@ -46,7 +46,9 @@ class User(Base):
     username: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     hashed_password: Mapped[str] = mapped_column(String(255))
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
+    max_api_keys: Mapped[int] = mapped_column(Integer, default=5)  # Max API keys per user
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     last_login: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
@@ -204,12 +206,22 @@ async def health():
 # ========== WEB AUTHENTICATION ENDPOINTS ==========
 
 @app.get("/auth/login", response_class=HTMLResponse)
-async def login_page(request: Request, redirect: Optional[str] = None, error: Optional[str] = None):
+async def login_page(
+    request: Request,
+    redirect: Optional[str] = None,
+    error: Optional[str] = None,
+    pending_validation: Optional[str] = None
+):
     """Login page"""
+    success_message = None
+    if pending_validation:
+        success_message = "Inscription réussie ! Votre compte est en attente de validation par l'administrateur."
+    
     return templates.TemplateResponse("login.html", {
         "request": request,
         "redirect_after": redirect,
-        "error": error
+        "error": error,
+        "success": success_message
     })
 
 @app.post("/auth/login")
@@ -238,7 +250,7 @@ async def login_submit(
         return templates.TemplateResponse("login.html", {
             "request": request,
             "redirect_after": redirect_after,
-            "error": "Compte désactivé"
+            "error": "Votre compte est en attente de validation par l'administrateur"
         })
     
     # Update last login
@@ -315,36 +327,22 @@ async def register_submit(
             "error": "Ce nom d'utilisateur ou email est déjà utilisé"
         })
     
-    # Create user
+    # Create user (inactive until admin validation)
     user = User(
         username=username,
         email=email,
         hashed_password=hash_password(password)
+        # is_active defaults to False now
     )
     session_db.add(user)
     await session_db.commit()
     await session_db.refresh(user)
     
-    # Create session
-    session_token = serialize_session(user.id)
-    
-    # Prepare response
-    if redirect_after:
-        response = RedirectResponse(url=redirect_after, status_code=303)
-    else:
-        response = RedirectResponse(url="/auth/dashboard", status_code=303)
-    
-    # Set session cookie
-    response.set_cookie(
-        key="vk_session",
-        value=session_token,
-        max_age=SESSION_EXPIRE_HOURS * 3600,
-        httponly=True,
-        secure=True,
-        samesite="lax"
+    # Redirect to login with pending validation message
+    return RedirectResponse(
+        url="/auth/login?pending_validation=true",
+        status_code=303
     )
-    
-    return response
 
 @app.get("/auth/dashboard", response_class=HTMLResponse)
 async def dashboard(
@@ -407,6 +405,18 @@ async def create_key_web(
         if result.scalar_one_or_none():
             return RedirectResponse(
                 url=f"/auth/dashboard?error=Une clé avec ce nom existe déjà",
+                status_code=303
+            )
+        
+        # Check API key limit for this user
+        existing_keys_result = await session_db.execute(
+            select(APIKey).where(APIKey.user_id == current_user.id)
+        )
+        existing_keys_count = len(existing_keys_result.scalars().all())
+        
+        if existing_keys_count >= current_user.max_api_keys:
+            return RedirectResponse(
+                url=f"/auth/dashboard?error=Limite d'API keys atteinte ({current_user.max_api_keys} max). Contactez l'administrateur.",
                 status_code=303
             )
         

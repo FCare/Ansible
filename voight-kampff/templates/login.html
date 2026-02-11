@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Voight-Kampff Authentication</title>
+    <title>Joshua Authentication</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         
@@ -143,14 +143,24 @@
             text-align: center;
             font-size: 0.9em;
         }
+        
+        .success {
+            background: rgba(76, 175, 80, 0.2);
+            border: 1px solid rgba(76, 175, 80, 0.5);
+            color: #fff;
+            padding: 12px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="logo">
             <h1>🔍</h1>
-            <h1>Voight-Kampff</h1>
-            <p>Testing for humanity, one request at a time</p>
+            <h1>Joshua</h1>
+            <p>Connectez-vous à vos services</p>
         </div>
         
         {% if redirect_after %}
@@ -162,6 +172,12 @@
         {% if error %}
         <div class="error">
             {{ error }}
+        </div>
+        {% endif %}
+        
+        {% if success %}
+        <div class="success">
+            {{ success }}
         </div>
         {% endif %}
         
