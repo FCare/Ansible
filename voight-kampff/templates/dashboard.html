@@ -261,12 +261,92 @@
             font-weight: 500;
             font-size: 0.9em;
         }
+        
+        .api-key-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .copy-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: #666;
+            font-size: 16px;
+            padding: 4px;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+        }
+        
+        .copy-btn:hover {
+            color: #007bff;
+            background: #f0f8ff;
+        }
+        
+        .copy-btn:active {
+            transform: scale(0.95);
+        }
+        
+        .copy-success {
+            color: #28a745 !important;
+        }
     </style>
     <script>
-        function submitScopeForm(userId) {
+        async function submitScopeForm(userId) {
             const form = document.getElementById('scope-form-' + userId);
-            if (form) {
-                form.submit();
+            if (!form) return;
+            
+            const formData = new FormData(form);
+            
+            try {
+                const response = await fetch(form.action, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    console.error('Error updating scopes:', response.statusText);
+                }
+                // No success message, no page reload - seamless interaction
+            } catch (error) {
+                console.error('Error updating scopes:', error);
+            }
+        }
+        
+        async function copyApiKey(apiKey, buttonElement) {
+            try {
+                await navigator.clipboard.writeText(apiKey);
+                
+                // Visual feedback
+                const originalContent = buttonElement.innerHTML;
+                buttonElement.innerHTML = '✓';
+                buttonElement.classList.add('copy-success');
+                
+                setTimeout(() => {
+                    buttonElement.innerHTML = originalContent;
+                    buttonElement.classList.remove('copy-success');
+                }, 1000);
+                
+            } catch (err) {
+                console.error('Failed to copy: ', err);
+                // Fallback for older browsers
+                const textArea = document.createElement('textarea');
+                textArea.value = apiKey;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                
+                // Visual feedback for fallback
+                const originalContent = buttonElement.innerHTML;
+                buttonElement.innerHTML = '✓';
+                buttonElement.classList.add('copy-success');
+                
+                setTimeout(() => {
+                    buttonElement.innerHTML = originalContent;
+                    buttonElement.classList.remove('copy-success');
+                }, 1000);
             }
         }
     </script>
@@ -364,8 +444,13 @@
                         <tr>
                             <td>{{ key.key_name }}</td>
                             <td>
-                                <div class="api-key-value" title="{{ key.api_key }}">
-                                    {{ key.api_key[:20] }}...
+                                <div class="api-key-container">
+                                    <div class="api-key-value" title="{{ key.api_key }}">
+                                        {{ key.api_key[:20] }}...
+                                    </div>
+                                    <button class="copy-btn" onclick="copyApiKey('{{ key.api_key }}', this)" title="Copier la clé API">
+                                        📋
+                                    </button>
                                 </div>
                             </td>
                             <td>{{ key.scopes | join(', ') }}</td>
