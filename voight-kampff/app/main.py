@@ -948,8 +948,16 @@ async def check_authentication(
                 if service == "auth":
                     api_key = f"session_{user_id}_{service}"
                     print(f"🔍 AUTH DEBUG - Allowing auth service access")
+                elif service == "*":
+                    # Landing page or general access check - allow if user has any scopes or is admin
+                    if user.allowed_scopes == "*" or user.allowed_scopes.strip() != "" or user.is_admin:
+                        api_key = f"session_{user_id}_{service}"
+                        print(f"🔍 AUTH DEBUG - Allowing general access (*) - user has scopes: {user.allowed_scopes}")
+                    else:
+                        print(f"🔍 AUTH DEBUG - User {user_name} has no scopes for general access")
+                        return False, None, None
                 elif user.allowed_scopes == "*" or '*' in user_allowed_scopes or service in user_allowed_scopes:
-                    # User has permission for this service
+                    # User has permission for this specific service
                     api_key = f"session_{user_id}_{service}"
                     print(f"🔍 AUTH DEBUG - User has permission for service {service}")
                 else:
@@ -1105,10 +1113,15 @@ async def landing_page(
     - Not authenticated: Redirect to auth.caronboulme.fr/auth/login
     """
     
+    print(f"🔍 LANDING DEBUG - Starting landing page authentication check")
+    print(f"🔍 LANDING DEBUG - Session cookie present: {'yes' if request.cookies.get('vk_session') else 'no'}")
+    
     # Check authentication (no specific service required for landing)
     is_authenticated, user_name, _ = await check_authentication(
         request, session_db, "*"
     )
+    
+    print(f"🔍 LANDING DEBUG - Authentication result: is_authenticated={is_authenticated}, user_name={user_name}")
     
     if is_authenticated:
         redirect_url = "https://thebrain.caronboulme.fr"
