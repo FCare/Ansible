@@ -895,21 +895,27 @@ async def check_authentication(
     Returns: (is_authenticated, username, api_key_record)
     """
     
+    logger.info(f"🔍 AUTH DEBUG - Starting check_authentication for service: {service}")
+    
     api_key = None
     user_name = "unknown"
     
     # Method 1: Try Authorization header (Bearer token)
     if authorization and authorization.startswith("Bearer "):
         api_key = authorization.replace("Bearer ", "").strip()
+        logger.info(f"🔍 AUTH DEBUG - Using Bearer token")
     
     # Method 2: Try X-API-Key header
     elif x_api_key:
         api_key = x_api_key.strip()
+        logger.info(f"🔍 AUTH DEBUG - Using X-API-Key header")
     
     # Method 3: Try session cookie
     elif request.cookies.get("vk_session"):
         session_cookie = request.cookies.get("vk_session")
+        logger.info(f"🔍 AUTH DEBUG - Found session cookie, deserializing...")
         user_id = deserialize_session(session_cookie)
+        logger.info(f"🔍 AUTH DEBUG - Deserialized user_id: {user_id}")
         
         if user_id:
             # Get user from database
@@ -917,30 +923,46 @@ async def check_authentication(
                 select(User).where(User.id == user_id, User.is_active == True)
             )
             user = user_result.scalar_one_or_none()
+            logger.info(f"🔍 AUTH DEBUG - User query result: {user.username if user else 'None'}")
             
             if user:
                 user_name = user.username
+                logger.info(f"🔍 AUTH DEBUG - User found: {user_name}, allowed_scopes: {user.allowed_scopes}")
                 
                 # For session cookies, verify USER scopes (admin-controlled permissions)
                 if user.allowed_scopes is None or user.allowed_scopes.strip() == "":
                     # No scopes defined, deny access (except auth service)
                     user_allowed_scopes = []
+                    logger.info(f"🔍 AUTH DEBUG - No scopes defined for user")
                 else:
                     user_allowed_scopes = [s.strip() for s in user.allowed_scopes.split(',') if s.strip()]
+                    logger.info(f"🔍 AUTH DEBUG - User allowed scopes: {user_allowed_scopes}")
                 
                 # Special case: always allow access to auth service for session management
                 if service == "auth":
                     api_key = f"session_{user_id}_{service}"
+                    logger.info(f"🔍 AUTH DEBUG - Allowing auth service access")
                 elif user.allowed_scopes == "*" or '*' in user_allowed_scopes or service in user_allowed_scopes:
                     # User has permission for this service
                     api_key = f"session_{user_id}_{service}"
+                    logger.info(f"🔍 AUTH DEBUG - User has permission for service {service}")
                 else:
                     # User doesn't have permission for this service
+                    logger.warning(f"🔍 AUTH DEBUG - User {user_name} does NOT have permission for service {service}")
                     return False, None, None
+            else:
+                logger.warning(f"🔍 AUTH DEBUG - No active user found for user_id {user_id}")
+        else:
+            logger.warning(f"🔍 AUTH DEBUG - Failed to deserialize session cookie")
+    else:
+        logger.info(f"🔍 AUTH DEBUG - No authentication method found")
     
     # If no authentication method found
     if not api_key:
+        logger.warning(f"🔍 AUTH DEBUG - No API key generated, authentication failed")
         return False, None, None
+    
+    logger.info(f"🔍 AUTH DEBUG - API key generated: {api_key[:20]}...")
     
     # Handle session-based authentication (pseudo API keys)
     if api_key.startswith("session_"):
@@ -1000,8 +1022,17 @@ async def verify_api_key(
     if x_forwarded_host:
         service = x_forwarded_host.split('.')[0]
     
+    # Debug logging
+    logger.info(f"🔍 VERIFY DEBUG - Service: {service}")
+    logger.info(f"🔍 VERIFY DEBUG - X-Forwarded-Host: {x_forwarded_host}")
+    logger.info(f"🔍 VERIFY DEBUG - X-Forwarded-Uri: {x_forwarded_uri}")
+    logger.info(f"🔍 VERIFY DEBUG - Authorization header: {'Bearer ***' if authorization and authorization.startswith('Bearer') else authorization}")
+    logger.info(f"🔍 VERIFY DEBUG - X-API-Key header: {'***' if x_api_key else None}")
+    logger.info(f"🔍 VERIFY DEBUG - Session cookie: {'present' if request.cookies.get('vk_session') else 'absent'}")
+    
     # Special case: Allow unrestricted access to photos/immich (has its own auth)
     if service == "photos":
+        logger.info(f"🔍 VERIFY DEBUG - Photos service bypass")
         return JSONResponse(
             status_code=200,
             content={"valid": True, "user": "immich-bypass", "service": service},
@@ -1012,11 +1043,15 @@ async def verify_api_key(
         )
     
     # Check authentication using common function for other services
+    logger.info(f"🔍 VERIFY DEBUG - Calling check_authentication for service: {service}")
     is_authenticated, user_name, db_key = await check_authentication(
         request, session_db, service, authorization, x_api_key
     )
     
+    logger.info(f"🔍 VERIFY DEBUG - Authentication result: is_authenticated={is_authenticated}, user_name={user_name}, db_key={'present' if db_key else 'None'}")
+    
     if not is_authenticated:
+        logger.warning(f"🔍 VERIFY DEBUG - Authentication FAILED for service {service}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Missing or invalid authentication"
