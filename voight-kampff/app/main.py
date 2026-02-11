@@ -571,44 +571,13 @@ async def verify_api_key(
                         api_key = key.api_key
                         break
     
-    # If no authentication method found, check if it's a browser request
+    # If no authentication method found, return 401
+    # Traefik will handle redirect via error pages middleware
     if not api_key:
-        # Check if this is a browser request (Accept header contains text/html)
-        accept_header = request.headers.get("accept", "")
-        user_agent = request.headers.get("user-agent", "")
-        
-        is_browser = (
-            "text/html" in accept_header or
-            "Mozilla" in user_agent
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing or invalid authentication"
         )
-        
-        if is_browser:
-            # Return HTML page with JavaScript redirect for browser users
-            redirect_url = f"https://auth.caronboulme.fr/auth/login"
-            if x_forwarded_uri and x_forwarded_host:
-                from urllib.parse import quote
-                redirect_url += f"?redirect={quote(f'https://{x_forwarded_host}{x_forwarded_uri}')}"
-            
-            html_content = f"""
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <title>Authentication Required</title>
-                <meta http-equiv="refresh" content="0;url={redirect_url}">
-            </head>
-            <body>
-                <p>Authentication required. <a href="{redirect_url}">Click here</a> if you are not redirected automatically.</p>
-                <script>window.location.href = "{redirect_url}";</script>
-            </body>
-            </html>
-            """
-            return HTMLResponse(content=html_content, status_code=401)
-        else:
-            # Return 401 for API clients
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Missing or invalid authentication"
-            )
     
     # Query database for API key
     result = await session.execute(
