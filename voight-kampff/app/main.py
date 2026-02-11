@@ -9,7 +9,6 @@ import secrets
 import re
 from datetime import datetime, timedelta
 from typing import Optional, List
-from sqlalchemy.orm import relationship
 
 from fastapi import FastAPI, Header, HTTPException, Depends, status, Request, Form, Cookie
 from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse
@@ -18,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy import String, DateTime, Boolean, Text, Integer, select
+from sqlalchemy import String, DateTime, Boolean, Text, Integer, select, ForeignKey
 import hashlib
 import bcrypt
 from itsdangerous import URLSafeTimedSerializer
@@ -58,16 +57,13 @@ class User(Base):
     allowed_scopes: Mapped[str] = mapped_column(Text, default="*")  # Allowed services for this user
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     last_login: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    
-    # Relationship to API keys
-    api_keys: Mapped[List["APIKey"]] = relationship("APIKey", back_populates="owner", cascade="all, delete-orphan")
 
 class Session(Base):
     __tablename__ = "sessions"
     
     id: Mapped[int] = mapped_column(primary_key=True)
     session_token: Mapped[str] = mapped_column(String(255), unique=True, index=True)
-    user_id: Mapped[int] = mapped_column()
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     expires_at: Mapped[datetime] = mapped_column(DateTime)
     last_used: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -79,7 +75,7 @@ class APIKey(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     key_name: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     api_key: Mapped[str] = mapped_column(String(64), unique=True, index=True)
-    user_id: Mapped[int] = mapped_column()  # Reference to User.id
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))  # Reference to User.id
     user: Mapped[str] = mapped_column(String(255))  # Keep for backward compatibility
     scopes: Mapped[str] = mapped_column(Text)  # Comma-separated list of allowed services
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -87,8 +83,6 @@ class APIKey(Base):
     last_used: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     
-    # Relationship to User
-    owner: Mapped["User"] = relationship("User", back_populates="api_keys")
 
 # Pydantic Models
 class APIKeyCreate(BaseModel):
