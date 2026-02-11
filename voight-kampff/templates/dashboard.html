@@ -233,6 +233,26 @@
             }
         }
     </style>
+    <script>
+        function toggleAllServices(allCheckbox, userId) {
+            const form = allCheckbox.closest('form');
+            const serviceCheckboxes = form.querySelectorAll('input[value!="*"]');
+            
+            if (allCheckbox.checked) {
+                // Cocher tous et désactiver les autres
+                serviceCheckboxes.forEach(cb => {
+                    cb.checked = true;
+                    cb.disabled = true;
+                });
+            } else {
+                // Réactiver tous et décocher
+                serviceCheckboxes.forEach(cb => {
+                    cb.disabled = false;
+                    cb.checked = false;
+                });
+            }
+        }
+    </script>
 </head>
 <body>
     <div class="container">
@@ -425,11 +445,69 @@
                             </td>
                             <td>{{ admin_user.api_key_count }}</td>
                             <td>
-                                <form method="post" action="/auth/admin/set-user-scopes/{{ admin_user.id }}" style="display: inline;">
-                                    <input type="text" name="scopes" value="{{ admin_user.allowed_scopes }}" placeholder="tts,stt,thebrain,*" style="width: 120px;">
-                                    <button type="submit" class="btn btn-small">Services</button>
-                                </form>
-                                <br><small>{{ admin_user.allowed_scopes }}</small>
+                                <details>
+                                    <summary style="cursor: pointer; font-size: 0.9em;">
+                                        {% if admin_user.allowed_scopes == "*" %}
+                                            🟢 Tous les services
+                                        {% else %}
+                                            📋 Services: {{ admin_user.allowed_scopes }}
+                                        {% endif %}
+                                    </summary>
+                                    <div style="margin: 10px 0; padding: 10px; border: 1px solid #ddd; border-radius: 4px; background: #f9f9f9;">
+                                        <form method="post" action="/auth/admin/set-user-scopes/{{ admin_user.id }}">
+                                            {% set user_scopes = admin_user.allowed_scopes.split(',') if admin_user.allowed_scopes != "*" else [] %}
+                                            {% set all_services = admin_user.allowed_scopes == "*" %}
+                                            
+                                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.8em;">
+                                                <label style="display: flex; align-items: center; gap: 4px;">
+                                                    <input type="checkbox" name="service" value="*"
+                                                           {% if all_services %}checked{% endif %}
+                                                           onchange="toggleAllServices(this, '{{ admin_user.id }}')">
+                                                    <strong>🌟 Tous les services</strong>
+                                                </label>
+                                                
+                                                <label style="display: flex; align-items: center; gap: 4px;">
+                                                    <input type="checkbox" name="service" value="thebrain"
+                                                           {% if "thebrain" in user_scopes or all_services %}checked{% endif %}
+                                                           {% if all_services %}disabled{% endif %}>
+                                                    🧠 TheBrain (LLM)
+                                                </label>
+                                                
+                                                <label style="display: flex; align-items: center; gap: 4px;">
+                                                    <input type="checkbox" name="service" value="tts"
+                                                           {% if "tts" in user_scopes or all_services %}checked{% endif %}
+                                                           {% if all_services %}disabled{% endif %}>
+                                                    🔊 TTS (Synthèse vocale)
+                                                </label>
+                                                
+                                                <label style="display: flex; align-items: center; gap: 4px;">
+                                                    <input type="checkbox" name="service" value="stt"
+                                                           {% if "stt" in user_scopes or all_services %}checked{% endif %}
+                                                           {% if all_services %}disabled{% endif %}>
+                                                    🎤 STT (Reconnaissance vocale)
+                                                </label>
+                                                
+                                                <label style="display: flex; align-items: center; gap: 4px;">
+                                                    <input type="checkbox" name="service" value="immich"
+                                                           {% if "immich" in user_scopes or all_services %}checked{% endif %}
+                                                           {% if all_services %}disabled{% endif %}>
+                                                    📸 Immich (Photos)
+                                                </label>
+                                                
+                                                <label style="display: flex; align-items: center; gap: 4px;">
+                                                    <input type="checkbox" name="service" value="analytics"
+                                                           {% if "analytics" in user_scopes or all_services %}checked{% endif %}
+                                                           {% if all_services %}disabled{% endif %}>
+                                                    📊 Analytics
+                                                </label>
+                                            </div>
+                                            
+                                            <div style="margin-top: 8px; text-align: right;">
+                                                <button type="submit" class="btn btn-small" style="background: #4ecdc4;">💾 Sauvegarder</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </details>
                             </td>
                             <td>{{ admin_user.created_at.strftime('%d/%m/%Y') }}</td>
                             <td>
@@ -450,17 +528,52 @@
                                 {% endif %}
                                 
                                 {% if admin_user.api_keys %}
-                                    <details style="margin-top: 5px;">
-                                        <summary style="cursor: pointer; font-size: 0.8em;">Voir API Keys ({{ admin_user.api_key_count }})</summary>
-                                        {% for key in admin_user.api_keys %}
-                                        <div style="margin: 2px 0; font-size: 0.7em;">
-                                            <strong>{{ key.key_name }}</strong> - {{ key.scopes }}
-                                            <form method="post" action="/auth/admin/revoke-user-key/{{ key.id }}" style="display: inline;" onsubmit="return confirm('Révoquer {{ key.key_name }} ?')">
-                                                <button type="submit" class="btn btn-danger" style="font-size: 0.6em; padding: 1px 3px;">Révoquer</button>
-                                            </form>
+                                    <details style="margin-top: 5px;" open>
+                                        <summary style="cursor: pointer; font-size: 0.8em; font-weight: bold; color: #4ecdc4;">
+                                            🗝️ API Keys ({{ admin_user.api_key_count }})
+                                        </summary>
+                                        <div style="margin-top: 8px; padding: 8px; background: #f8f9fa; border-radius: 4px;">
+                                            {% for key in admin_user.api_keys %}
+                                            {% set key_color = "#4ecdc4" if key.is_active else "#ff6b6b" %}
+                                            <div style="margin: 6px 0; padding: 6px; background: white; border-radius: 3px; border-left: 3px solid {{ key_color }};">
+                                                <div style="font-size: 0.75em; display: flex; justify-content: space-between; align-items: center;">
+                                                    <div>
+                                                        <strong style="color: #333;">{{ key.key_name }}</strong>
+                                                        {% if not key.is_active %}
+                                                            <span style="color: #ff6b6b; font-size: 0.6em;">● RÉVOQUÉE</span>
+                                                        {% endif %}
+                                                        <br>
+                                                        <span style="color: #666; font-size: 0.65em;">
+                                                            🔧 Services:
+                                                            {% if key.scopes == "*" %}
+                                                                <strong style="color: #ffd700;">Tous les services</strong>
+                                                            {% else %}
+                                                                {{ key.scopes }}
+                                                            {% endif %}
+                                                        </span>
+                                                        <br>
+                                                        <span style="color: #999; font-size: 0.6em;">
+                                                            📅 Créée: {{ key.created_at.strftime('%d/%m/%Y') }}
+                                                            {% if key.last_used %}
+                                                                | 👆 Dernière utilisation: {{ key.last_used.strftime('%d/%m/%Y %H:%M') }}
+                                                            {% endif %}
+                                                            {% if key.expires_at %}
+                                                                | ⏰ Expire: {{ key.expires_at.strftime('%d/%m/%Y') }}
+                                                            {% endif %}
+                                                        </span>
+                                                    </div>
+                                                    {% if key.is_active %}
+                                                    <form method="post" action="/auth/admin/revoke-user-key/{{ key.id }}" style="display: inline;" onsubmit="return confirm('❌ Révoquer définitivement {{ key.key_name }} ?')">
+                                                        <button type="submit" class="btn btn-danger" style="font-size: 0.65em; padding: 3px 6px;">❌ Révoquer</button>
+                                                    </form>
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+                                            {% endfor %}
                                         </div>
-                                        {% endfor %}
                                     </details>
+                                {% else %}
+                                    <span style="color: #999; font-size: 0.8em;">Aucune API key</span>
                                 {% endif %}
                             </td>
                         </tr>

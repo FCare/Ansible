@@ -771,13 +771,28 @@ async def delete_user(
 @app.post("/auth/admin/set-user-scopes/{user_id}")
 async def set_user_scopes(
     user_id: int,
-    scopes: str = Form(...),
+    request: Request,
     current_user: User = Depends(get_current_user),
     session_db: AsyncSession = Depends(get_session)
 ):
     """Set allowed services/scopes for a user (admin only)"""
     if not current_user or not current_user.is_admin:
         return RedirectResponse(url="/auth/dashboard?error=Accès interdit", status_code=303)
+    
+    # Récupérer les données du formulaire
+    form_data = await request.form()
+    services = form_data.getlist("service")  # Récupère toutes les valeurs cochées
+    
+    # Si aucun service sélectionné, définir comme vide
+    if not services:
+        new_scopes = ""
+    else:
+        # Si "*" (tous services) est sélectionné, on utilise "*"
+        if "*" in services:
+            new_scopes = "*"
+        else:
+            # Sinon, joindre les services sélectionnés par des virgules
+            new_scopes = ",".join(services)
     
     result = await session_db.execute(
         select(User).where(User.id == user_id)
@@ -787,11 +802,12 @@ async def set_user_scopes(
     if not user:
         return RedirectResponse(url="/auth/dashboard?error=Utilisateur introuvable", status_code=303)
     
-    user.allowed_scopes = scopes.strip()
+    user.allowed_scopes = new_scopes
     await session_db.commit()
     
+    scope_display = "Tous les services" if new_scopes == "*" else (new_scopes or "Aucun service")
     return RedirectResponse(
-        url=f"/auth/dashboard?success=Services autorisés mis à jour pour {user.username}",
+        url=f"/auth/dashboard?success=Services autorisés mis à jour pour {user.username}: {scope_display}",
         status_code=303
     )
 
@@ -863,27 +879,30 @@ async def check_authentication(
             if user:
                 user_name = user.username
                 
-                # Get user's first active API key for this service or any service
-                api_key_result = await session.execute(
-                    select(APIKey).where(
-                        APIKey.user_id == user_id,
-                        APIKey.is_active == True
-                    ).order_by(APIKey.created_at.desc())
-                )
-                user_keys = api_key_result.scalars().all()
+                # For session cookies, verify USER scopes (admin-controlled permissions)
+                user_allowed_scopes = [s.strip() for s in user.allowed_scopes.split(',') if s.strip()]
                 
-                # Find a key that matches the service or has global access
-                for key in user_keys:
-                    allowed_scopes = [s.strip() for s in key.scopes.split(',')]
-                    if service in allowed_scopes or '*' in allowed_scopes:
-                        api_key = key.api_key
-                        break
+                # Special case: always allow access to auth service for session management
+                if service == "auth":
+                    api_key = f"session_{user_id}_{service}"
+                elif '*' in user_allowed_scopes or service in user_allowed_scopes:
+                    # User has permission for this service
+                    api_key = f"session_{user_id}_{service}"
+                else:
+                    # User doesn't have permission for this service
+                    return False, None, None
     
     # If no authentication method found
     if not api_key:
         return False, None, None
     
-    # Query database for API key
+    # Handle session-based authentication (pseudo API keys)
+    if api_key.startswith("session_"):
+        # For session-based auth, we already validated the user and scopes above
+        # Return success with the user_name we extracted from session
+        return True, user_name, None
+    
+    # Query database for real API key
     result = await session.execute(
         select(APIKey).where(APIKey.api_key == api_key)
     )
@@ -900,12 +919,12 @@ async def check_authentication(
     if db_key.expires_at and db_key.expires_at < datetime.utcnow():
         return False, None, None
     
-    # Check scopes
+    # Check scopes for real API keys
     allowed_scopes = [s.strip() for s in db_key.scopes.split(',')]
     if service not in allowed_scopes and '*' not in allowed_scopes:
         return False, None, None
     
-    # Update last_used timestamp
+    # Update last_used timestamp for real API keys
     db_key.last_used = datetime.utcnow()
     await session.commit()
     
