@@ -383,6 +383,13 @@
                 <h2>🛠️ Administration</h2>
                 <p><strong>Gestion des utilisateurs</strong> - Vous avez {{ api_key_count }}/{{ max_api_keys }} clés API</p>
                 
+                <div style="margin-bottom: 20px;">
+                    <a href="/auth/admin/traefik" target="_blank"
+                       style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 8px 16px; text-decoration: none; border-radius: 4px; display: inline-block; font-size: 14px; margin-right: 10px;">
+                        🔧 Dashboard Traefik
+                    </a>
+                </div>
+                
                 {% if admin_users %}
                 <table class="api-keys-table">
                     <thead>
@@ -392,7 +399,7 @@
                             <th>Statut</th>
                             <th>Admin</th>
                             <th>API Keys</th>
-                            <th>Limite</th>
+                            <th>Services autorisés</th>
                             <th>Inscrit le</th>
                             <th>Actions</th>
                         </tr>
@@ -417,7 +424,13 @@
                                 {% endif %}
                             </td>
                             <td>{{ admin_user.api_key_count }}</td>
-                            <td>{{ admin_user.max_api_keys }}</td>
+                            <td>
+                                <form method="post" action="/auth/admin/set-user-scopes/{{ admin_user.id }}" style="display: inline;">
+                                    <input type="text" name="scopes" value="{{ admin_user.allowed_scopes }}" placeholder="tts,stt,thebrain,*" style="width: 120px;">
+                                    <button type="submit" class="btn btn-small">Services</button>
+                                </form>
+                                <br><small>{{ admin_user.allowed_scopes }}</small>
+                            </td>
                             <td>{{ admin_user.created_at.strftime('%d/%m/%Y') }}</td>
                             <td>
                                 {% if not admin_user.is_admin %}
@@ -430,12 +443,25 @@
                                             <button type="submit" class="btn btn-success btn-small">Activer</button>
                                         </form>
                                     {% endif %}
+                                
+                                    <form method="post" action="/auth/admin/delete-user/{{ admin_user.id }}" style="display: inline;" onsubmit="return confirm('⚠️ ATTENTION: Supprimer définitivement {{ admin_user.username }} et toutes ses API keys ?')">
+                                        <button type="submit" class="btn btn-danger btn-small">Supprimer</button>
+                                    </form>
                                 {% endif %}
                                 
-                                <form method="post" action="/auth/admin/set-api-limit/{{ admin_user.id }}" style="display: inline;">
-                                    <input type="number" name="max_keys" value="{{ admin_user.max_api_keys }}" min="0" max="100" style="width: 50px;">
-                                    <button type="submit" class="btn btn-small">Limite</button>
-                                </form>
+                                {% if admin_user.api_keys %}
+                                    <details style="margin-top: 5px;">
+                                        <summary style="cursor: pointer; font-size: 0.8em;">Voir API Keys ({{ admin_user.api_key_count }})</summary>
+                                        {% for key in admin_user.api_keys %}
+                                        <div style="margin: 2px 0; font-size: 0.7em;">
+                                            <strong>{{ key.key_name }}</strong> - {{ key.scopes }}
+                                            <form method="post" action="/auth/admin/revoke-user-key/{{ key.id }}" style="display: inline;" onsubmit="return confirm('Révoquer {{ key.key_name }} ?')">
+                                                <button type="submit" class="btn btn-danger" style="font-size: 0.6em; padding: 1px 3px;">Révoquer</button>
+                                            </form>
+                                        </div>
+                                        {% endfor %}
+                                    </details>
+                                {% endif %}
                             </td>
                         </tr>
                         {% endfor %}

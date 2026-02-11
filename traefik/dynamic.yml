@@ -1,6 +1,7 @@
 http:
   middlewares:
     # Hybrid Authentication middleware (API Key + Cookie)
+    # Auto-detects admin requirements (traefik service)
     vk-hybrid:
       forwardAuth:
         address: "http://ansible-voight-kampff:8080/verify"
@@ -13,6 +14,7 @@ http:
           - X-VK-User
           - X-VK-Service
           - X-VK-Scopes
+          - X-VK-Admin
     
     # Redirect root to landing page
     redirect-to-landing:
@@ -95,7 +97,18 @@ http:
       middlewares:
         - vk-hybrid
 
-  services:
+    # Traefik Dashboard - Admin only (auto-detected by /verify)
+    traefik-dashboard:
+      rule: "Host(`traefik.caronboulme.fr`)"
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: letsencrypt
+      service: api@internal
+      middlewares:
+        - vk-hybrid
+
+ services:
     # Auth Service - Voight-Kampff Web Interface
     auth-service:
       loadBalancer:

@@ -9,6 +9,7 @@ import secrets
 import re
 from datetime import datetime, timedelta
 from typing import Optional, List
+from sqlalchemy.orm import relationship
 
 from fastapi import FastAPI, Header, HTTPException, Depends, status, Request, Form, Cookie
 from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse
@@ -53,9 +54,13 @@ class User(Base):
     hashed_password: Mapped[str] = mapped_column(String(255))
     is_active: Mapped[bool] = mapped_column(Boolean, default=False)
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
-    max_api_keys: Mapped[int] = mapped_column(Integer, default=5)  # Max API keys per user
+    max_api_keys: Mapped[int] = mapped_column(Integer, default=100)  # Hardcoded to 100
+    allowed_scopes: Mapped[str] = mapped_column(Text, default="*")  # Allowed services for this user
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     last_login: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    
+    # Relationship to API keys
+    api_keys: Mapped[List["APIKey"]] = relationship("APIKey", back_populates="owner", cascade="all, delete-orphan")
 
 class Session(Base):
     __tablename__ = "sessions"
@@ -81,6 +86,9 @@ class APIKey(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     last_used: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    
+    # Relationship to User
+    owner: Mapped["User"] = relationship("User", back_populates="api_keys")
 
 # Pydantic Models
 class APIKeyCreate(BaseModel):
@@ -227,7 +235,8 @@ async def create_admin_if_needed():
                 hashed_password=hash_password(ADMIN_PASSWORD),
                 is_active=True,
                 is_admin=True,
-                max_api_keys=50  # Higher limit for admin
+                max_api_keys=100,  # Hardcoded limit
+                allowed_scopes="*"  # Admin can access all services
             )
             session.add(admin_user)
             await session.commit()
@@ -441,11 +450,25 @@ async def dashboard(
         all_users = result.scalars().all()
         
         for user in all_users:
-            # Count API keys for each user
+            # Get detailed API keys for each user
             api_key_result = await session_db.execute(
                 select(APIKey).where(APIKey.user_id == user.id)
             )
             user_api_keys = api_key_result.scalars().all()
+            
+            # Format API keys for admin display
+            formatted_api_keys = []
+            for key in user_api_keys:
+                formatted_api_keys.append({
+                    'id': key.id,
+                    'key_name': key.key_name,
+                    'api_key': key.api_key,
+                    'scopes': [s.strip() for s in key.scopes.split(',')],
+                    'is_active': key.is_active,
+                    'created_at': key.created_at,
+                    'last_used': key.last_used,
+                    'expires_at': key.expires_at
+                })
             
             admin_users.append({
                 'id': user.id,
@@ -454,7 +477,9 @@ async def dashboard(
                 'is_active': user.is_active,
                 'is_admin': user.is_admin,
                 'max_api_keys': user.max_api_keys,
+                'allowed_scopes': user.allowed_scopes,
                 'api_key_count': len(user_api_keys),
+                'api_keys': formatted_api_keys,
                 'created_at': user.created_at,
                 'last_login': user.last_login
             })
@@ -470,6 +495,17 @@ async def dashboard(
         "success": success,
         "error": error
     })
+
+@app.get("/auth/admin/traefik")
+async def admin_traefik_dashboard(
+    current_user: User = Depends(get_current_user)
+):
+    """Redirect admin to Traefik dashboard"""
+    if not current_user or not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    # Redirect to secured Traefik dashboard
+    return RedirectResponse(url="https://traefik.caronboulme.fr", status_code=302)
 
 @app.post("/auth/dashboard/create-key")
 async def create_key_web(
@@ -495,17 +531,18 @@ async def create_key_web(
                 status_code=303
             )
         
-        # Check API key limit for this user
-        existing_keys_result = await session_db.execute(
-            select(APIKey).where(APIKey.user_id == current_user.id)
-        )
-        existing_keys_count = len(existing_keys_result.scalars().all())
+        # Check allowed scopes for this user
+        user_allowed_scopes = [s.strip() for s in current_user.allowed_scopes.split(',')]
+        requested_scopes = set(scopes)
         
-        if existing_keys_count >= current_user.max_api_keys:
-            return RedirectResponse(
-                url=f"/auth/dashboard?error=Limite d'API keys atteinte ({current_user.max_api_keys} max). Contactez l'administrateur.",
-                status_code=303
-            )
+        # If user doesn't have "*" (all services), check individual scopes
+        if "*" not in user_allowed_scopes:
+            forbidden_scopes = requested_scopes - set(user_allowed_scopes)
+            if forbidden_scopes:
+                return RedirectResponse(
+                    url=f"/auth/dashboard?error=Services non autorisés: {', '.join(forbidden_scopes)}. Contactez l'administrateur.",
+                    status_code=303
+                )
         
         # Generate secure API key
         new_api_key = secrets.token_urlsafe(48)
@@ -692,6 +729,106 @@ async def set_user_api_limit(
         status_code=303
     )
 
+@app.post("/auth/admin/delete-user/{user_id}")
+async def delete_user(
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    session_db: AsyncSession = Depends(get_session)
+):
+    """Delete a user account permanently (admin only)"""
+    if not current_user or not current_user.is_admin:
+        return RedirectResponse(url="/auth/dashboard?error=Accès interdit", status_code=303)
+    
+    result = await session_db.execute(
+        select(User).where(User.id == user_id)
+    )
+    user = result.scalar_one_or_none()
+    
+    if not user:
+        return RedirectResponse(url="/auth/dashboard?error=Utilisateur introuvable", status_code=303)
+    
+    if user.is_admin:
+        return RedirectResponse(url="/auth/dashboard?error=Impossible de supprimer un administrateur", status_code=303)
+    
+    if user.id == current_user.id:
+        return RedirectResponse(url="/auth/dashboard?error=Impossible de se supprimer soi-même", status_code=303)
+    
+    # Delete all user's API keys first
+    await session_db.execute(
+        select(APIKey).where(APIKey.user_id == user_id)
+    )
+    user_keys = (await session_db.execute(
+        select(APIKey).where(APIKey.user_id == user_id)
+    )).scalars().all()
+    
+    for key in user_keys:
+        await session_db.delete(key)
+    
+    # Delete the user
+    username = user.username
+    await session_db.delete(user)
+    await session_db.commit()
+    
+    return RedirectResponse(
+        url=f"/auth/dashboard?success=Utilisateur {username} supprimé définitivement",
+        status_code=303
+    )
+
+@app.post("/auth/admin/set-user-scopes/{user_id}")
+async def set_user_scopes(
+    user_id: int,
+    scopes: str = Form(...),
+    current_user: User = Depends(get_current_user),
+    session_db: AsyncSession = Depends(get_session)
+):
+    """Set allowed services/scopes for a user (admin only)"""
+    if not current_user or not current_user.is_admin:
+        return RedirectResponse(url="/auth/dashboard?error=Accès interdit", status_code=303)
+    
+    result = await session_db.execute(
+        select(User).where(User.id == user_id)
+    )
+    user = result.scalar_one_or_none()
+    
+    if not user:
+        return RedirectResponse(url="/auth/dashboard?error=Utilisateur introuvable", status_code=303)
+    
+    user.allowed_scopes = scopes.strip()
+    await session_db.commit()
+    
+    return RedirectResponse(
+        url=f"/auth/dashboard?success=Services autorisés mis à jour pour {user.username}",
+        status_code=303
+    )
+
+@app.post("/auth/admin/revoke-user-key/{key_id}")
+async def revoke_user_key(
+    key_id: int,
+    current_user: User = Depends(get_current_user),
+    session_db: AsyncSession = Depends(get_session)
+):
+    """Revoke (delete) a user's API key (admin only)"""
+    if not current_user or not current_user.is_admin:
+        return RedirectResponse(url="/auth/dashboard?error=Accès interdit", status_code=303)
+    
+    result = await session_db.execute(
+        select(APIKey).where(APIKey.id == key_id)
+    )
+    api_key = result.scalar_one_or_none()
+    
+    if not api_key:
+        return RedirectResponse(url="/auth/dashboard?error=Clé API introuvable", status_code=303)
+    
+    key_name = api_key.key_name
+    user_name = api_key.user
+    await session_db.delete(api_key)
+    await session_db.commit()
+    
+    return RedirectResponse(
+        url=f"/auth/dashboard?success=Clé '{key_name}' de {user_name} révoquée",
+        status_code=303
+    )
+
 # ========== AUTHENTICATION HELPER FUNCTION ==========
 
 async def check_authentication(
@@ -797,6 +934,7 @@ async def verify_api_key(
     """
     Enhanced verify endpoint for Traefik ForwardAuth
     Supports both API keys and session cookies
+    Auto-detects admin-only services (traefik)
     """
     
     # Extract service name from forwarded host
@@ -815,6 +953,20 @@ async def verify_api_key(
             detail="Missing or invalid authentication"
         )
     
+    # Check if admin access is required for specific services
+    if service == "traefik":
+        # Get user from database to check admin status
+        result = await session_db.execute(
+            select(User).where(User.username == user_name)
+        )
+        user = result.scalar_one_or_none()
+        
+        if not user or not user.is_admin:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Admin access required for Traefik dashboard"
+            )
+    
     # Return success with custom headers
     return JSONResponse(
         status_code=200,
@@ -822,9 +974,11 @@ async def verify_api_key(
         headers={
             "X-VK-User": user_name,
             "X-VK-Service": service,
-            "X-VK-Scopes": db_key.scopes
+            "X-VK-Scopes": db_key.scopes if db_key else "*",
+            "X-VK-Admin": "true" if service == "traefik" else "false"
         }
     )
+
 
 # ========== LANDING PAGE WITH CONDITIONAL REDIRECT ==========
 
