@@ -1108,13 +1108,15 @@ async def landing_page(
     session_db: AsyncSession = Depends(get_session)
 ):
     """
-    Landing page that redirects based on authentication status
-    - Authenticated: Redirect to thebrain.caronboulme.fr
+    Landing page that redirects based on authentication status and source domain
+    - From www.caronboulme.fr + authenticated: Redirect to thebrain.caronboulme.fr
+    - From auth.caronboulme.fr + authenticated: Redirect to dashboard
     - Not authenticated: Redirect to auth.caronboulme.fr/auth/login
     """
     
     print(f"🔍 LANDING DEBUG - Starting landing page authentication check")
     print(f"🔍 LANDING DEBUG - Session cookie present: {'yes' if request.cookies.get('vk_session') else 'no'}")
+    print(f"🔍 LANDING DEBUG - Host header: {request.headers.get('host')}")
     
     # Check authentication (no specific service required for landing)
     is_authenticated, user_name, _ = await check_authentication(
@@ -1123,86 +1125,183 @@ async def landing_page(
     
     print(f"🔍 LANDING DEBUG - Authentication result: is_authenticated={is_authenticated}, user_name={user_name}")
     
+    # Get the host to determine source domain
+    host = request.headers.get('host', '')
+    is_from_www = host.startswith('www.caronboulme.fr')
+    print(f"🔍 LANDING DEBUG - Is from www.caronboulme.fr: {is_from_www}")
+    
     if is_authenticated:
-        redirect_url = "https://thebrain.caronboulme.fr"
-        title = f"Welcome back, {user_name}!"
-        message = f"Hello {user_name}, redirecting you to The Brain..."
+        if is_from_www:
+            # Only redirect to TheBrain if coming from www.caronboulme.fr
+            redirect_url = "https://thebrain.caronboulme.fr"
+            title = f"Welcome back, {user_name}!"
+            message = f"Hello {user_name}, redirecting you to The Brain..."
+        else:
+            # From auth.caronboulme.fr or other domains, show landing page without redirect
+            redirect_url = None  # No automatic redirect
+            title = f"Welcome back, {user_name}!"
+            message = f"Hello {user_name}, you are successfully authenticated!"
     else:
         redirect_url = "https://auth.caronboulme.fr/auth/login"
         title = "Authentication Required"
         message = "Please login to access your services..."
     
-    html_content = f"""
-    <!DOCTYPE html>
-    <html lang="fr">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>{title}</title>
-        <meta http-equiv="refresh" content="2;url={redirect_url}">
-        <style>
-            body {{
-                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
-                color: #fff;
-                min-height: 100vh;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                margin: 0;
-            }}
-            .container {{
-                text-align: center;
-                background: rgba(255, 255, 255, 0.1);
-                backdrop-filter: blur(10px);
-                border-radius: 20px;
-                padding: 40px;
-                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-                border: 1px solid rgba(255, 255, 255, 0.2);
-            }}
-            .logo {{
-                font-size: 3em;
-                margin-bottom: 20px;
-            }}
-            .spinner {{
-                border: 3px solid rgba(255, 255, 255, 0.3);
-                border-top: 3px solid #4ecdc4;
-                border-radius: 50%;
-                width: 40px;
-                height: 40px;
-                animation: spin 1s linear infinite;
-                margin: 20px auto;
-            }}
-            @keyframes spin {{
-                0% {{ transform: rotate(0deg); }}
-                100% {{ transform: rotate(360deg); }}
-            }}
-            a {{
-                color: #4ecdc4;
-                text-decoration: none;
-                font-weight: 500;
-            }}
-            a:hover {{
-                text-decoration: underline;
-            }}
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="logo">🔍</div>
-            <h1>{title}</h1>
-            <p>{message}</p>
-            <div class="spinner"></div>
-            <p><a href="{redirect_url}">Click here if you are not redirected automatically</a></p>
-        </div>
-        <script>
-            setTimeout(function() {{
-                window.location.href = "{redirect_url}";
-            }}, 2000);
-        </script>
-    </body>
-    </html>
-    """
+    # Generate different HTML based on whether we have a redirect_url
+    if redirect_url:
+        html_content = f"""
+        <!DOCTYPE html>
+        <html lang="fr">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>{title}</title>
+            <meta http-equiv="refresh" content="2;url={redirect_url}">
+            <style>
+                body {{
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                    background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+                    color: #fff;
+                    min-height: 100vh;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    margin: 0;
+                }}
+                .container {{
+                    text-align: center;
+                    background: rgba(255, 255, 255, 0.1);
+                    backdrop-filter: blur(10px);
+                    border-radius: 20px;
+                    padding: 40px;
+                    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+                    border: 1px solid rgba(255, 255, 255, 0.2);
+                }}
+                .logo {{
+                    font-size: 3em;
+                    margin-bottom: 20px;
+                }}
+                .spinner {{
+                    border: 3px solid rgba(255, 255, 255, 0.3);
+                    border-top: 3px solid #4ecdc4;
+                    border-radius: 50%;
+                    width: 40px;
+                    height: 40px;
+                    animation: spin 1s linear infinite;
+                    margin: 20px auto;
+                }}
+                @keyframes spin {{
+                    0% {{ transform: rotate(0deg); }}
+                    100% {{ transform: rotate(360deg); }}
+                }}
+                a {{
+                    color: #4ecdc4;
+                    text-decoration: none;
+                    font-weight: 500;
+                }}
+                a:hover {{
+                    text-decoration: underline;
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="logo">🔍</div>
+                <h1>{title}</h1>
+                <p>{message}</p>
+                <div class="spinner"></div>
+                <p><a href="{redirect_url}">Click here if you are not redirected automatically</a></p>
+            </div>
+            <script>
+                setTimeout(function() {{
+                    window.location.href = "{redirect_url}";
+                }}, 2000);
+            </script>
+        </body>
+        </html>
+        """
+    else:
+        # No redirect - show static landing page
+        html_content = f"""
+        <!DOCTYPE html>
+        <html lang="fr">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>{title}</title>
+            <style>
+                body {{
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                    background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+                    color: #fff;
+                    min-height: 100vh;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    margin: 0;
+                }}
+                .container {{
+                    text-align: center;
+                    background: rgba(255, 255, 255, 0.1);
+                    backdrop-filter: blur(10px);
+                    border-radius: 20px;
+                    padding: 40px;
+                    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+                    border: 1px solid rgba(255, 255, 255, 0.2);
+                    max-width: 500px;
+                }}
+                .logo {{
+                    font-size: 3em;
+                    margin-bottom: 20px;
+                }}
+                .services {{
+                    margin-top: 30px;
+                }}
+                .service-link {{
+                    display: inline-block;
+                    background: rgba(78, 205, 196, 0.2);
+                    color: #4ecdc4;
+                    padding: 10px 20px;
+                    margin: 10px;
+                    border-radius: 10px;
+                    text-decoration: none;
+                    font-weight: 500;
+                    border: 1px solid rgba(78, 205, 196, 0.3);
+                    transition: all 0.3s ease;
+                }}
+                .service-link:hover {{
+                    background: rgba(78, 205, 196, 0.3);
+                    transform: translateY(-2px);
+                }}
+                .dashboard-link {{
+                    background: rgba(255, 255, 255, 0.2);
+                    color: #fff;
+                    margin-top: 20px;
+                }}
+                .dashboard-link:hover {{
+                    background: rgba(255, 255, 255, 0.3);
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="logo">🔍</div>
+                <h1>{title}</h1>
+                <p>{message}</p>
+                
+                <div class="services">
+                    <h3>Available Services</h3>
+                    <a href="https://thebrain.caronboulme.fr" class="service-link">🧠 The Brain</a>
+                    <a href="https://unmute-talk.caronboulme.fr" class="service-link">🎤 Unmute Talk</a>
+                    <a href="https://chatterbox.caronboulme.fr" class="service-link">💬 Chatterbox</a>
+                    <a href="https://photos.caronboulme.fr" class="service-link">📸 Photos</a>
+                    
+                    <br>
+                    <a href="/auth/dashboard" class="service-link dashboard-link">⚙️ Account Dashboard</a>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
     
     return HTMLResponse(content=html_content, status_code=200)
 
