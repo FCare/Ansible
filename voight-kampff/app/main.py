@@ -508,29 +508,22 @@ async def logout():
     response.delete_cookie(key="vk_session")
     return response
 
-# ========== VERIFICATION ENDPOINT (ENHANCED FOR COOKIES) ==========
+# ========== AUTHENTICATION HELPER FUNCTION ==========
 
-@app.get("/verify")
-async def verify_api_key(
+async def check_authentication(
     request: Request,
-    x_forwarded_uri: Optional[str] = Header(None),
-    x_forwarded_host: Optional[str] = Header(None),
-    authorization: Optional[str] = Header(None),
-    x_api_key: Optional[str] = Header(None),
-    session: AsyncSession = Depends(get_session)
-):
+    session: AsyncSession,
+    service: str = "unknown",
+    authorization: Optional[str] = None,
+    x_api_key: Optional[str] = None
+) -> tuple[bool, Optional[str], Optional[APIKey]]:
     """
-    Enhanced verify endpoint for Traefik ForwardAuth
-    Supports both API keys and session cookies
+    Common authentication logic for both /verify and landing page
+    Returns: (is_authenticated, username, api_key_record)
     """
     
     api_key = None
     user_name = "unknown"
-    
-    # Extract service name from forwarded host
-    service = "unknown"
-    if x_forwarded_host:
-        service = x_forwarded_host.split('.')[0]
     
     # Method 1: Try Authorization header (Bearer token)
     if authorization and authorization.startswith("Bearer "):
@@ -571,13 +564,9 @@ async def verify_api_key(
                         api_key = key.api_key
                         break
     
-    # If no authentication method found, return 401
-    # Traefik will handle redirect via error pages middleware
+    # If no authentication method found
     if not api_key:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing or invalid authentication"
-        )
+        return False, None, None
     
     # Query database for API key
     result = await session.execute(
@@ -586,32 +575,20 @@ async def verify_api_key(
     db_key = result.scalar_one_or_none()
     
     if not db_key:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid API key"
-        )
+        return False, None, None
     
     # Check if key is active
     if not db_key.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="API key is disabled"
-        )
+        return False, None, None
     
     # Check expiration
     if db_key.expires_at and db_key.expires_at < datetime.utcnow():
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="API key has expired"
-        )
+        return False, None, None
     
     # Check scopes
     allowed_scopes = [s.strip() for s in db_key.scopes.split(',')]
     if service not in allowed_scopes and '*' not in allowed_scopes:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Access denied: API key does not have permission for service '{service}'"
-        )
+        return False, None, None
     
     # Update last_used timestamp
     db_key.last_used = datetime.utcnow()
@@ -620,16 +597,151 @@ async def verify_api_key(
     # Use the original user name if available, otherwise fall back to API key user
     final_user = user_name if user_name != "unknown" else db_key.user
     
+    return True, final_user, db_key
+
+# ========== VERIFICATION ENDPOINT (ENHANCED FOR COOKIES) ==========
+
+@app.get("/verify")
+async def verify_api_key(
+    request: Request,
+    x_forwarded_uri: Optional[str] = Header(None),
+    x_forwarded_host: Optional[str] = Header(None),
+    authorization: Optional[str] = Header(None),
+    x_api_key: Optional[str] = Header(None),
+    session_db: AsyncSession = Depends(get_session)
+):
+    """
+    Enhanced verify endpoint for Traefik ForwardAuth
+    Supports both API keys and session cookies
+    """
+    
+    # Extract service name from forwarded host
+    service = "unknown"
+    if x_forwarded_host:
+        service = x_forwarded_host.split('.')[0]
+    
+    # Check authentication using common function
+    is_authenticated, user_name, db_key = await check_authentication(
+        request, session_db, service, authorization, x_api_key
+    )
+    
+    if not is_authenticated:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing or invalid authentication"
+        )
+    
     # Return success with custom headers
     return JSONResponse(
         status_code=200,
-        content={"valid": True, "user": final_user, "service": service},
+        content={"valid": True, "user": user_name, "service": service},
         headers={
-            "X-VK-User": final_user,
+            "X-VK-User": user_name,
             "X-VK-Service": service,
             "X-VK-Scopes": db_key.scopes
         }
     )
+
+# ========== LANDING PAGE WITH CONDITIONAL REDIRECT ==========
+
+@app.get("/landing", response_class=HTMLResponse)
+async def landing_page(
+    request: Request,
+    session_db: AsyncSession = Depends(get_session)
+):
+    """
+    Landing page that redirects based on authentication status
+    - Authenticated: Redirect to thebrain.caronboulme.fr
+    - Not authenticated: Redirect to auth.caronboulme.fr/auth/login
+    """
+    
+    # Check authentication (no specific service required for landing)
+    is_authenticated, user_name, _ = await check_authentication(
+        request, session_db, "*"
+    )
+    
+    if is_authenticated:
+        redirect_url = "https://thebrain.caronboulme.fr"
+        title = f"Welcome back, {user_name}!"
+        message = f"Hello {user_name}, redirecting you to The Brain..."
+    else:
+        redirect_url = "https://auth.caronboulme.fr/auth/login"
+        title = "Authentication Required"
+        message = "Please login to access your services..."
+    
+    html_content = f"""
+    <!DOCTYPE html>
+    <html lang="fr">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>{title}</title>
+        <meta http-equiv="refresh" content="2;url={redirect_url}">
+        <style>
+            body {{
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+                color: #fff;
+                min-height: 100vh;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                margin: 0;
+            }}
+            .container {{
+                text-align: center;
+                background: rgba(255, 255, 255, 0.1);
+                backdrop-filter: blur(10px);
+                border-radius: 20px;
+                padding: 40px;
+                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+                border: 1px solid rgba(255, 255, 255, 0.2);
+            }}
+            .logo {{
+                font-size: 3em;
+                margin-bottom: 20px;
+            }}
+            .spinner {{
+                border: 3px solid rgba(255, 255, 255, 0.3);
+                border-top: 3px solid #4ecdc4;
+                border-radius: 50%;
+                width: 40px;
+                height: 40px;
+                animation: spin 1s linear infinite;
+                margin: 20px auto;
+            }}
+            @keyframes spin {{
+                0% {{ transform: rotate(0deg); }}
+                100% {{ transform: rotate(360deg); }}
+            }}
+            a {{
+                color: #4ecdc4;
+                text-decoration: none;
+                font-weight: 500;
+            }}
+            a:hover {{
+                text-decoration: underline;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="logo">🔍</div>
+            <h1>{title}</h1>
+            <p>{message}</p>
+            <div class="spinner"></div>
+            <p><a href="{redirect_url}">Click here if you are not redirected automatically</a></p>
+        </div>
+        <script>
+            setTimeout(function() {{
+                window.location.href = "{redirect_url}";
+            }}, 2000);
+        </script>
+    </body>
+    </html>
+    """
+    
+    return HTMLResponse(content=html_content, status_code=200)
 
 # ========== ORIGINAL API ENDPOINTS ==========
 

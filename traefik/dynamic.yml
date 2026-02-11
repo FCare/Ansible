@@ -13,20 +13,38 @@ http:
           - X-VK-User
           - X-VK-Service
           - X-VK-Scopes
-
-    # Error pages middleware for authentication redirect
-    auth-errors:
-      errors:
-        status:
-          - "401"
-          - "403"
-        service: auth-service
-        query: "/auth/login?redirect={url}"
+    
+    # Redirect root to landing page
+    redirect-to-landing:
+      redirectRegex:
+        regex: "^https://www\\.caronboulme\\.fr/$"
+        replacement: "https://www.caronboulme.fr/landing"
+        permanent: false
 
   routers:
-    # Basic router for testing
+    # Auth Service - Web Interface
     auth:
       rule: "Host(`auth.caronboulme.fr`)"
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: letsencrypt
+      service: auth-service
+
+    # Landing page with conditional redirect
+    www-landing:
+      rule: "Host(`www.caronboulme.fr`) && Path(`/`)"
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: letsencrypt
+      service: auth-service
+      middlewares:
+        - redirect-to-landing
+        
+    # Landing endpoint
+    www-landing-endpoint:
+      rule: "Host(`www.caronboulme.fr`) && Path(`/landing`)"
       entryPoints:
         - websecure
       tls:
@@ -43,7 +61,6 @@ http:
       service: vllm-service
       middlewares:
         - vk-hybrid
-        - auth-errors
 
     # TTS Service - Unmute Talk (protected by hybrid auth)
     unmute-talk:
@@ -81,6 +98,12 @@ http:
   services:
     # Auth Service - Voight-Kampff Web Interface
     auth-service:
+      loadBalancer:
+        servers:
+          - url: "http://ansible-voight-kampff:8080"
+
+    # Landing Service - Conditional Redirect Page
+    landing-service:
       loadBalancer:
         servers:
           - url: "http://ansible-voight-kampff:8080"
