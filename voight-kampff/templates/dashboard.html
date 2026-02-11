@@ -388,22 +388,30 @@
                     <div class="form-group">
                         <label>Services autorisés</label>
                         <div class="scopes-checkboxes">
+                            {% if 'thebrain' in user_allowed_scopes %}
                             <div class="checkbox-item">
                                 <input type="checkbox" id="thebrain" name="scopes" value="thebrain">
                                 <label for="thebrain">TheBrain (LLM)</label>
                             </div>
+                            {% endif %}
+                            {% if 'unmute-talk' in user_allowed_scopes %}
                             <div class="checkbox-item">
                                 <input type="checkbox" id="tts" name="scopes" value="unmute-talk">
                                 <label for="tts">TTS (Text-to-Speech)</label>
                             </div>
+                            {% endif %}
+                            {% if 'unmute-transcript' in user_allowed_scopes %}
                             <div class="checkbox-item">
                                 <input type="checkbox" id="stt" name="scopes" value="unmute-transcript">
                                 <label for="stt">STT (Speech-to-Text)</label>
                             </div>
+                            {% endif %}
+                            {% if 'chatterbox' in user_allowed_scopes %}
                             <div class="checkbox-item">
                                 <input type="checkbox" id="chatterbox" name="scopes" value="chatterbox">
                                 <label for="chatterbox">Chatterbox TTS</label>
                             </div>
+                            {% endif %}
                         </div>
                     </div>
                     

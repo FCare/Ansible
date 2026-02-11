@@ -478,6 +478,13 @@ async def dashboard(
                 'last_login': user.last_login
             })
     
+    # Parse user's allowed scopes for the API key creation form
+    user_allowed_scopes = []
+    if current_user.allowed_scopes == "*":
+        user_allowed_scopes = ["thebrain", "unmute-talk", "unmute-transcript", "chatterbox"]
+    elif current_user.allowed_scopes:
+        user_allowed_scopes = [s.strip() for s in current_user.allowed_scopes.split(',') if s.strip()]
+    
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
         "user": current_user.username,
@@ -486,6 +493,7 @@ async def dashboard(
         "api_key_count": len(api_keys),
         "api_keys": api_keys_formatted,
         "admin_users": admin_users,
+        "user_allowed_scopes": user_allowed_scopes,
         "success": success,
         "error": error
     })
