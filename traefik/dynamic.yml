@@ -28,8 +28,45 @@ http:
         period: 1s
         burst: 50
 
+    # API Key Authentication middlewares
+    vk-tts:
+      forwardAuth:
+        address: "http://ansible-voight-kampff:8080/verify"
+        trustForwardHeader: true
+        authResponseHeaders:
+          - X-VK-User
+          - X-VK-Service
+          - X-VK-Scopes
+
+    vk-stt:
+      forwardAuth:
+        address: "http://ansible-voight-kampff:8080/verify"
+        trustForwardHeader: true
+        authResponseHeaders:
+          - X-VK-User
+          - X-VK-Service
+          - X-VK-Scopes
+
+    vk-chatterbox:
+      forwardAuth:
+        address: "http://ansible-voight-kampff:8080/verify"
+        trustForwardHeader: true
+        authResponseHeaders:
+          - X-VK-User
+          - X-VK-Service
+          - X-VK-Scopes
+
+    vk-thebrain:
+      forwardAuth:
+        address: "http://ansible-voight-kampff:8080/verify"
+        trustForwardHeader: true
+        authResponseHeaders:
+          - X-VK-User
+          - X-VK-Service
+          - X-VK-Scopes
+
   routers:
-    # TTS Service - Unmute Talk
+    # TTS Service - Unmute Talk (protected by API key)
     unmute-talk:
       rule: "Host(`unmute-talk.caronboulme.fr`)"
       entryPoints:
@@ -37,8 +74,10 @@ http:
       tls:
         certResolver: letsencrypt
       service: tts-service
+      middlewares:
+        - vk-tts
 
-    # STT Service - Unmute Transcript
+    # STT Service - Unmute Transcript (protected by API key)
     unmute-transcript:
       rule: "Host(`unmute-transcript.caronboulme.fr`)"
       entryPoints:
@@ -46,8 +85,10 @@ http:
       tls:
         certResolver: letsencrypt
       service: stt-service
+      middlewares:
+        - vk-stt
 
-    # Chatterbox TTS Service
+    # Chatterbox TTS Service (protected by API key)
     chatterbox:
       rule: "Host(`chatterbox.caronboulme.fr`)"
       entryPoints:
@@ -55,8 +96,10 @@ http:
       tls:
         certResolver: letsencrypt
       service: chatterbox-service
+      middlewares:
+        - vk-chatterbox
 
-    # vLLM FastAPI - The Brain
+    # vLLM FastAPI - The Brain (protected by API key)
     thebrain:
       rule: "Host(`thebrain.caronboulme.fr`)"
       entryPoints:
@@ -64,6 +107,8 @@ http:
       tls:
         certResolver: letsencrypt
       service: vllm-service
+      middlewares:
+        - vk-thebrain
 
     # Immich - Photo Management
     immich:
