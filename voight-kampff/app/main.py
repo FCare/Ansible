@@ -18,7 +18,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy import String, DateTime, Boolean, Text, Integer, select
-from passlib.context import CryptContext
+import hashlib
+import bcrypt
 from itsdangerous import URLSafeTimedSerializer
 import uvicorn
 
@@ -29,7 +30,6 @@ SECRET_KEY = os.getenv("VK_SECRET_KEY", secrets.token_urlsafe(32))
 SESSION_EXPIRE_HOURS = int(os.getenv("VK_SESSION_EXPIRE_HOURS", "24"))
 
 # Security
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 session_serializer = URLSafeTimedSerializer(SECRET_KEY)
 
 # Templates
@@ -125,10 +125,17 @@ async def init_db():
 
 # Utility functions
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    """Hash a password using bcrypt"""
+    password_bytes = password.encode('utf-8')
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(password_bytes, salt)
+    return hashed.decode('utf-8')
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    """Verify a password against its hash"""
+    password_bytes = plain_password.encode('utf-8')
+    hashed_bytes = hashed_password.encode('utf-8')
+    return bcrypt.checkpw(password_bytes, hashed_bytes)
 
 def create_session_token() -> str:
     return secrets.token_urlsafe(32)
