@@ -658,8 +658,17 @@ async def delete_key_web(
 @app.get("/auth/logout")
 async def logout():
     """Logout and clear session"""
+    print(f"🔍 LOGOUT DEBUG - User logged out")
     response = RedirectResponse(url="/auth/login", status_code=303)
-    response.delete_cookie(key="vk_session")
+    
+    # Delete cookie with same domain settings as when it was created
+    response.delete_cookie(
+        key="vk_session",
+        domain=".caronboulme.fr",  # Same domain as when cookie was set
+        secure=True,
+        samesite="lax"
+    )
+    print(f"🔍 LOGOUT DEBUG - Session cookie deleted for domain .caronboulme.fr")
     return response
 
 # ========== ADMIN ENDPOINTS ==========
