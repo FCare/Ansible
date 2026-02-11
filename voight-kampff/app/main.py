@@ -245,16 +245,17 @@ async def startup_event():
     print(f"🌐 Web interface available at /auth/")
 
 @app.get("/")
-async def root(request: Request):
-    # Check if user is already logged in via session cookie
-    if request.cookies.get("vk_session"):
-        session_cookie = request.cookies.get("vk_session")
-        user_id = deserialize_session(session_cookie)
-        if user_id:
-            # User is logged in, redirect to dashboard
-            return RedirectResponse(url="/auth/dashboard", status_code=302)
+async def root(request: Request, session_db: AsyncSession = Depends(get_session)):
+    # Check if user is already logged in with valid session
+    is_authenticated, user_name, db_key = await check_authentication(
+        request, session_db, "auth", None, None
+    )
     
-    # User not logged in, redirect to login page
+    if is_authenticated and user_name and user_name != "unknown":
+        # Valid session found, redirect to TheBrain
+        return RedirectResponse(url="https://thebrain.caronboulme.fr/", status_code=302)
+    
+    # No valid session, redirect to login page
     return RedirectResponse(url="/auth/login", status_code=302)
 
 @app.get("/health")
