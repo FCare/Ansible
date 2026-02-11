@@ -29,6 +29,11 @@ DATABASE_URL = f"sqlite+aiosqlite:///{DB_PATH}"
 SECRET_KEY = os.getenv("VK_SECRET_KEY", secrets.token_urlsafe(32))
 SESSION_EXPIRE_HOURS = int(os.getenv("VK_SESSION_EXPIRE_HOURS", "24"))
 
+# Admin configuration
+ADMIN_USERNAME = os.getenv("VK_ADMIN_USERNAME")
+ADMIN_PASSWORD = os.getenv("VK_ADMIN_PASSWORD")
+ADMIN_EMAIL = os.getenv("VK_ADMIN_EMAIL", "admin@localhost")
+
 # Security
 session_serializer = URLSafeTimedSerializer(SECRET_KEY)
 
@@ -185,10 +190,54 @@ app = FastAPI(
     version="2.0.0"
 )
 
+async def create_admin_if_needed():
+    """Create admin user if environment variables are set and no admin exists"""
+    if not ADMIN_USERNAME or not ADMIN_PASSWORD:
+        return
+    
+    async with async_session_maker() as session:
+        # Check if any admin user exists
+        result = await session.execute(
+            select(User).where(User.is_admin == True)
+        )
+        existing_admin = result.scalar_one_or_none()
+        
+        if existing_admin:
+            print(f"Admin user already exists: {existing_admin.username}")
+            return
+        
+        # Check if username already exists
+        result = await session.execute(
+            select(User).where(User.username == ADMIN_USERNAME)
+        )
+        existing_user = result.scalar_one_or_none()
+        
+        if existing_user:
+            # Promote existing user to admin
+            existing_user.is_admin = True
+            existing_user.is_active = True
+            existing_user.max_api_keys = 50  # Higher limit for admin
+            await session.commit()
+            print(f"Promoted existing user '{ADMIN_USERNAME}' to admin")
+        else:
+            # Create new admin user
+            admin_user = User(
+                username=ADMIN_USERNAME,
+                email=ADMIN_EMAIL,
+                hashed_password=hash_password(ADMIN_PASSWORD),
+                is_active=True,
+                is_admin=True,
+                max_api_keys=50  # Higher limit for admin
+            )
+            session.add(admin_user)
+            await session.commit()
+            print(f"Created admin user: {ADMIN_USERNAME}")
+
 @app.on_event("startup")
 async def startup_event():
     await init_db()
-    print("🔍 Voight-Kampff authentication service is running")
+    await create_admin_if_needed()
+    print("🔍 Joshua authentication service is running")
     print(f"📁 Database: {DB_PATH}")
     print(f"🌐 Web interface available at /auth/")
 
@@ -383,10 +432,41 @@ async def dashboard(
             'expires_at': key.expires_at
         })
     
+    # Admin data if user is admin
+    admin_users = []
+    if current_user.is_admin:
+        result = await session_db.execute(
+            select(User).order_by(User.created_at.desc())
+        )
+        all_users = result.scalars().all()
+        
+        for user in all_users:
+            # Count API keys for each user
+            api_key_result = await session_db.execute(
+                select(APIKey).where(APIKey.user_id == user.id)
+            )
+            user_api_keys = api_key_result.scalars().all()
+            
+            admin_users.append({
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'is_active': user.is_active,
+                'is_admin': user.is_admin,
+                'max_api_keys': user.max_api_keys,
+                'api_key_count': len(user_api_keys),
+                'created_at': user.created_at,
+                'last_login': user.last_login
+            })
+    
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
         "user": current_user.username,
+        "is_admin": current_user.is_admin,
+        "max_api_keys": current_user.max_api_keys,
+        "api_key_count": len(api_keys),
         "api_keys": api_keys_formatted,
+        "admin_users": admin_users,
         "success": success,
         "error": error
     })
@@ -524,6 +604,93 @@ async def logout():
     response = RedirectResponse(url="/auth/login", status_code=303)
     response.delete_cookie(key="vk_session")
     return response
+
+# ========== ADMIN ENDPOINTS ==========
+
+@app.post("/auth/admin/activate-user/{user_id}")
+async def activate_user(
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    session_db: AsyncSession = Depends(get_session)
+):
+    """Activate a user account (admin only)"""
+    if not current_user or not current_user.is_admin:
+        return RedirectResponse(url="/auth/dashboard?error=Accès interdit", status_code=303)
+    
+    result = await session_db.execute(
+        select(User).where(User.id == user_id)
+    )
+    user = result.scalar_one_or_none()
+    
+    if not user:
+        return RedirectResponse(url="/auth/dashboard?error=Utilisateur introuvable", status_code=303)
+    
+    user.is_active = True
+    await session_db.commit()
+    
+    return RedirectResponse(
+        url=f"/auth/dashboard?success=Utilisateur {user.username} activé avec succès",
+        status_code=303
+    )
+
+@app.post("/auth/admin/deactivate-user/{user_id}")
+async def deactivate_user(
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    session_db: AsyncSession = Depends(get_session)
+):
+    """Deactivate a user account (admin only)"""
+    if not current_user or not current_user.is_admin:
+        return RedirectResponse(url="/auth/dashboard?error=Accès interdit", status_code=303)
+    
+    result = await session_db.execute(
+        select(User).where(User.id == user_id)
+    )
+    user = result.scalar_one_or_none()
+    
+    if not user:
+        return RedirectResponse(url="/auth/dashboard?error=Utilisateur introuvable", status_code=303)
+    
+    if user.is_admin:
+        return RedirectResponse(url="/auth/dashboard?error=Impossible de désactiver un administrateur", status_code=303)
+    
+    user.is_active = False
+    await session_db.commit()
+    
+    return RedirectResponse(
+        url=f"/auth/dashboard?success=Utilisateur {user.username} désactivé",
+        status_code=303
+    )
+
+@app.post("/auth/admin/set-api-limit/{user_id}")
+async def set_user_api_limit(
+    user_id: int,
+    max_keys: int = Form(...),
+    current_user: User = Depends(get_current_user),
+    session_db: AsyncSession = Depends(get_session)
+):
+    """Set API key limit for a user (admin only)"""
+    if not current_user or not current_user.is_admin:
+        return RedirectResponse(url="/auth/dashboard?error=Accès interdit", status_code=303)
+    
+    result = await session_db.execute(
+        select(User).where(User.id == user_id)
+    )
+    user = result.scalar_one_or_none()
+    
+    if not user:
+        return RedirectResponse(url="/auth/dashboard?error=Utilisateur introuvable", status_code=303)
+    
+    if max_keys < 0 or max_keys > 100:
+        return RedirectResponse(url="/auth/dashboard?error=Limite invalide (0-100)", status_code=303)
+    
+    user.max_api_keys = max_keys
+    await session_db.commit()
+    
+    return RedirectResponse(
+        url=f"/auth/dashboard?success=Limite API pour {user.username} définie à {max_keys}",
+        status_code=303
+    )
 
 # ========== AUTHENTICATION HELPER FUNCTION ==========
 

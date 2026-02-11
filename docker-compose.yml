@@ -43,7 +43,12 @@ services:
       - ansible
     environment:
       - TZ=Europe/Paris
-      - VK_DB_PATH=/data/voight-kampff.db
+      - VK_DB_PATH=${VK_DB_PATH:-/data/voight-kampff.db}
+      - VK_SECRET_KEY=${VK_SECRET_KEY}
+      - VK_SESSION_EXPIRE_HOURS=${VK_SESSION_EXPIRE_HOURS:-24}
+      - VK_ADMIN_USERNAME=${VK_ADMIN_USERNAME}
+      - VK_ADMIN_PASSWORD=${VK_ADMIN_PASSWORD}
+      - VK_ADMIN_EMAIL=${VK_ADMIN_EMAIL}
     volumes:
       - ./voight-kampff/data:/data
       - ./voight-kampff/config:/config

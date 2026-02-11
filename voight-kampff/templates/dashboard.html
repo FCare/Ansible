@@ -376,6 +376,75 @@
                 <p>Vous n'avez pas encore créé d'API Key. Utilisez le formulaire ci-dessus pour en créer une.</p>
                 {% endif %}
             </div>
+            
+            {% if is_admin %}
+            <!-- Section d'administration -->
+            <div class="card admin-section">
+                <h2>🛠️ Administration</h2>
+                <p><strong>Gestion des utilisateurs</strong> - Vous avez {{ api_key_count }}/{{ max_api_keys }} clés API</p>
+                
+                {% if admin_users %}
+                <table class="api-keys-table">
+                    <thead>
+                        <tr>
+                            <th>Utilisateur</th>
+                            <th>Email</th>
+                            <th>Statut</th>
+                            <th>Admin</th>
+                            <th>API Keys</th>
+                            <th>Limite</th>
+                            <th>Inscrit le</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for admin_user in admin_users %}
+                        <tr>
+                            <td><strong>{{ admin_user.username }}</strong></td>
+                            <td>{{ admin_user.email }}</td>
+                            <td>
+                                {% if admin_user.is_active %}
+                                    <span style="color: #4ecdc4;">✓ Actif</span>
+                                {% else %}
+                                    <span style="color: #ff6b6b;">✗ Inactif</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if admin_user.is_admin %}
+                                    <span style="color: #ffd700;">👑 Admin</span>
+                                {% else %}
+                                    Utilisateur
+                                {% endif %}
+                            </td>
+                            <td>{{ admin_user.api_key_count }}</td>
+                            <td>{{ admin_user.max_api_keys }}</td>
+                            <td>{{ admin_user.created_at.strftime('%d/%m/%Y') }}</td>
+                            <td>
+                                {% if not admin_user.is_admin %}
+                                    {% if admin_user.is_active %}
+                                        <form method="post" action="/auth/admin/deactivate-user/{{ admin_user.id }}" style="display: inline;">
+                                            <button type="submit" class="btn btn-danger btn-small" onclick="return confirm('Désactiver {{ admin_user.username }} ?')">Désactiver</button>
+                                        </form>
+                                    {% else %}
+                                        <form method="post" action="/auth/admin/activate-user/{{ admin_user.id }}" style="display: inline;">
+                                            <button type="submit" class="btn btn-success btn-small">Activer</button>
+                                        </form>
+                                    {% endif %}
+                                {% endif %}
+                                
+                                <form method="post" action="/auth/admin/set-api-limit/{{ admin_user.id }}" style="display: inline;">
+                                    <input type="number" name="max_keys" value="{{ admin_user.max_api_keys }}" min="0" max="100" style="width: 50px;">
+                                    <button type="submit" class="btn btn-small">Limite</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% endif %}
+            </div>
+            {% endif %}
+            
         </div>
     </div>
 </body>
