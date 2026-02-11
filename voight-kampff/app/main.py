@@ -332,7 +332,8 @@ async def login_submit(
         max_age=SESSION_EXPIRE_HOURS * 3600,
         httponly=True,
         secure=True,
-        samesite="lax"
+        samesite="lax",
+        domain=".caronboulme.fr"  # Allow cookie on all subdomains
     )
     
     return response
