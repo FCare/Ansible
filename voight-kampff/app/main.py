@@ -583,14 +583,26 @@ async def verify_api_key(
         )
         
         if is_browser:
-            # Redirect browser users to login page
+            # Return HTML page with JavaScript redirect for browser users
             redirect_url = f"https://auth.caronboulme.fr/auth/login"
-            if x_forwarded_uri:
-                # Add the original URL as redirect parameter
+            if x_forwarded_uri and x_forwarded_host:
                 from urllib.parse import quote
                 redirect_url += f"?redirect={quote(f'https://{x_forwarded_host}{x_forwarded_uri}')}"
             
-            return RedirectResponse(url=redirect_url, status_code=302)
+            html_content = f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Authentication Required</title>
+                <meta http-equiv="refresh" content="0;url={redirect_url}">
+            </head>
+            <body>
+                <p>Authentication required. <a href="{redirect_url}">Click here</a> if you are not redirected automatically.</p>
+                <script>window.location.href = "{redirect_url}";</script>
+            </body>
+            </html>
+            """
+            return HTMLResponse(content=html_content, status_code=401)
         else:
             # Return 401 for API clients
             raise HTTPException(
