@@ -245,18 +245,17 @@ async def startup_event():
     print(f"🌐 Web interface available at /auth/")
 
 @app.get("/")
-async def root():
-    return {
-        "service": "Voight-Kampff",
-        "version": "2.0.0",
-        "description": "API Key Authentication Service with Web Interface",
-        "endpoints": {
-            "verify": "/verify - Verify API key (used by Traefik ForwardAuth)",
-            "keys": "/keys - Manage API keys",
-            "web": "/auth/ - Web interface",
-            "health": "/health - Health check"
-        }
-    }
+async def root(request: Request):
+    # Check if user is already logged in via session cookie
+    if request.cookies.get("vk_session"):
+        session_cookie = request.cookies.get("vk_session")
+        user_id = deserialize_session(session_cookie)
+        if user_id:
+            # User is logged in, redirect to dashboard
+            return RedirectResponse(url="/auth/dashboard", status_code=302)
+    
+    # User not logged in, redirect to login page
+    return RedirectResponse(url="/auth/login", status_code=302)
 
 @app.get("/health")
 async def health():
