@@ -263,25 +263,6 @@
         }
     </style>
     <script>
-        function toggleAllServices(allCheckbox, userId) {
-            const form = allCheckbox.closest('form');
-            const serviceCheckboxes = form.querySelectorAll('input[value!="*"]');
-            
-            if (allCheckbox.checked) {
-                // Cocher tous et désactiver les autres
-                serviceCheckboxes.forEach(cb => {
-                    cb.checked = true;
-                    cb.disabled = true;
-                });
-            } else {
-                // Réactiver tous et décocher
-                serviceCheckboxes.forEach(cb => {
-                    cb.disabled = false;
-                    cb.checked = false;
-                });
-            }
-        }
-        
         function submitScopeForm(userId) {
             const form = document.getElementById('scope-form-' + userId);
             if (form) {
@@ -495,49 +476,37 @@
                                             {% set all_services = admin_user.allowed_scopes == "*" %}
                                             
                                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 0.9em;">
-                                                <label class="service-label" data-service="all">
-                                                    <input type="checkbox" name="service" value="*"
-                                                           {% if all_services %}checked{% endif %}
-                                                           onchange="toggleAllServices(this, '{{ admin_user.id }}'); submitScopeForm('{{ admin_user.id }}')">
-                                                    <span>Tous les services</span>
-                                                </label>
-                                                
                                                 <label class="service-label" data-service="thebrain">
                                                     <input type="checkbox" name="service" value="thebrain"
-                                                           {% if "thebrain" in user_scopes or all_services %}checked{% endif %}
-                                                           {% if all_services %}disabled{% endif %}
+                                                           {% if "thebrain" in user_scopes %}checked{% endif %}
                                                            onchange="submitScopeForm('{{ admin_user.id }}')">
                                                     <span>TheBrain</span>
                                                 </label>
                                                 
                                                 <label class="service-label" data-service="tts">
                                                     <input type="checkbox" name="service" value="tts"
-                                                           {% if "tts" in user_scopes or all_services %}checked{% endif %}
-                                                           {% if all_services %}disabled{% endif %}
+                                                           {% if "tts" in user_scopes %}checked{% endif %}
                                                            onchange="submitScopeForm('{{ admin_user.id }}')">
                                                     <span>TTS</span>
                                                 </label>
                                                 
                                                 <label class="service-label" data-service="stt">
                                                     <input type="checkbox" name="service" value="stt"
-                                                           {% if "stt" in user_scopes or all_services %}checked{% endif %}
-                                                           {% if all_services %}disabled{% endif %}
+                                                           {% if "stt" in user_scopes %}checked{% endif %}
                                                            onchange="submitScopeForm('{{ admin_user.id }}')">
                                                     <span>STT</span>
                                                 </label>
                                                 
                                                 <label class="service-label" data-service="immich">
                                                     <input type="checkbox" name="service" value="immich"
-                                                           {% if "immich" in user_scopes or all_services %}checked{% endif %}
-                                                           {% if all_services %}disabled{% endif %}
+                                                           {% if "immich" in user_scopes %}checked{% endif %}
                                                            onchange="submitScopeForm('{{ admin_user.id }}')">
                                                     <span>Immich</span>
                                                 </label>
                                                 
                                                 <label class="service-label" data-service="analytics">
                                                     <input type="checkbox" name="service" value="analytics"
-                                                           {% if "analytics" in user_scopes or all_services %}checked{% endif %}
-                                                           {% if all_services %}disabled{% endif %}
+                                                           {% if "analytics" in user_scopes %}checked{% endif %}
                                                            onchange="submitScopeForm('{{ admin_user.id }}')">
                                                     <span>Analytics</span>
                                                 </label>
@@ -548,6 +517,17 @@
                             </td>
                             <td>{{ admin_user.created_at.strftime('%d/%m/%Y') }}</td>
                             <td>
+                                {% if admin_user.id != user.id %}
+                                    <!-- Toggle Admin Status -->
+                                    <form method="post" action="/auth/admin/toggle-admin/{{ admin_user.id }}" style="display: inline;">
+                                        {% if admin_user.is_admin %}
+                                            <button type="submit" class="btn btn-warning btn-small" onclick="return confirm('Rétrograder {{ admin_user.username }} en utilisateur ?')">→ Utilisateur</button>
+                                        {% else %}
+                                            <button type="submit" class="btn btn-success btn-small" onclick="return confirm('Promouvoir {{ admin_user.username }} en admin ?')">→ Admin</button>
+                                        {% endif %}
+                                    </form>
+                                {% endif %}
+                                
                                 {% if not admin_user.is_admin %}
                                     {% if admin_user.is_active %}
                                         <form method="post" action="/auth/admin/deactivate-user/{{ admin_user.id }}" style="display: inline;">

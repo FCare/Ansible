@@ -839,6 +839,40 @@ async def revoke_user_key(
         status_code=303
     )
 
+@app.post("/auth/admin/toggle-admin/{user_id}")
+async def toggle_admin_status(
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    session_db: AsyncSession = Depends(get_session)
+):
+    """Toggle admin status of a user (admin only)"""
+    if not current_user or not current_user.is_admin:
+        return RedirectResponse(url="/auth/dashboard?error=Accès interdit", status_code=303)
+    
+    # Get target user
+    result = await session_db.execute(
+        select(User).where(User.id == user_id)
+    )
+    target_user = result.scalar_one_or_none()
+    
+    if not target_user:
+        return RedirectResponse(url="/auth/dashboard?error=Utilisateur introuvable", status_code=303)
+    
+    # Prevent self-demotion to avoid lock-out
+    if target_user.id == current_user.id:
+        return RedirectResponse(url="/auth/dashboard?error=Vous ne pouvez pas modifier votre propre statut admin", status_code=303)
+    
+    # Toggle admin status
+    new_status = not target_user.is_admin
+    target_user.is_admin = new_status
+    await session_db.commit()
+    
+    status_text = "promu admin" if new_status else "rétrogradé utilisateur"
+    return RedirectResponse(
+        url=f"/auth/dashboard?success=Utilisateur {target_user.username} {status_text}",
+        status_code=303
+    )
+
 # ========== AUTHENTICATION HELPER FUNCTION ==========
 
 async def check_authentication(
