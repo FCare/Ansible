@@ -108,7 +108,7 @@ http:
       middlewares:
         - vk-hybrid
 
- services:
+  services:
     # Auth Service - Voight-Kampff Web Interface
     auth-service:
       loadBalancer:
