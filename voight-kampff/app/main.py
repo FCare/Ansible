@@ -246,16 +246,33 @@ async def startup_event():
 
 @app.get("/")
 async def root(request: Request, session_db: AsyncSession = Depends(get_session)):
+    print(f"🔍 ROOT DEBUG - Root endpoint accessed from host: {request.headers.get('host')}")
+    
     # Check if user is already logged in with valid session
     is_authenticated, user_name, db_key = await check_authentication(
         request, session_db, "auth", None, None
     )
     
+    print(f"🔍 ROOT DEBUG - Authentication result: is_authenticated={is_authenticated}, user_name={user_name}")
+    
+    # Get the host to determine source domain
+    host = request.headers.get('host', '')
+    is_from_www = host.startswith('www.caronboulme.fr')
+    
+    print(f"🔍 ROOT DEBUG - Is from www.caronboulme.fr: {is_from_www}")
+    
     if is_authenticated and user_name and user_name != "unknown":
-        # Valid session found, redirect to TheBrain
-        return RedirectResponse(url="https://thebrain.caronboulme.fr/", status_code=302)
+        if is_from_www:
+            # Only redirect to TheBrain if coming from www.caronboulme.fr
+            print(f"🔍 ROOT DEBUG - Redirecting to TheBrain from www")
+            return RedirectResponse(url="https://thebrain.caronboulme.fr/", status_code=302)
+        else:
+            # From auth.caronboulme.fr or other domains, redirect to dashboard
+            print(f"🔍 ROOT DEBUG - Redirecting to dashboard from auth/other")
+            return RedirectResponse(url="/auth/dashboard", status_code=302)
     
     # No valid session, redirect to login page
+    print(f"🔍 ROOT DEBUG - Not authenticated, redirecting to login")
     return RedirectResponse(url="/auth/login", status_code=302)
 
 @app.get("/health")
