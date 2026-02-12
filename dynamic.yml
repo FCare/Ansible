@@ -108,6 +108,28 @@ http:
       middlewares:
         - vk-hybrid
 
+    # Joshua Backend API
+    joshua-backend:
+      rule: "Host(`joshua.caronboulme.fr`)"
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: letsencrypt
+      service: joshua-backend-service
+      middlewares:
+        - vk-hybrid
+
+    # Joshua Frontend
+    joshua-frontend:
+      rule: "Host(`assistant.caronboulme.fr`)"
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: letsencrypt
+      service: joshua-frontend-service
+      middlewares:
+        - vk-hybrid
+
     # Photos Service - Immich (no auth middleware needed, has its own auth)
     photos:
       rule: "Host(`photos.caronboulme.fr`)"
@@ -152,6 +174,18 @@ http:
       loadBalancer:
         servers:
           - url: "http://chatterbox-tts-api-blackwell:4123"
+
+    # Joshua Backend Service
+    joshua-backend-service:
+      loadBalancer:
+        servers:
+          - url: "http://joshua-backend:8768"
+
+    # Joshua Frontend Service
+    joshua-frontend-service:
+      loadBalancer:
+        servers:
+          - url: "http://joshua-frontend:80"
 
     # Photos Service - Immich Server
     photos-service:
