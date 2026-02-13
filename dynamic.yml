@@ -54,6 +54,14 @@ http:
       stripPrefix:
         prefixes:
           - "/joshua"
+    
+    # Debug logging pour Joshua WebSocket
+    joshua-debug:
+      headers:
+        customRequestHeaders:
+          X-Debug-Route: "joshua-websocket"
+        customResponseHeaders:
+          X-Debug-Backend: "joshua-backend:8769"
 
   routers:
     # Auth Service - Web Interface
@@ -170,6 +178,7 @@ http:
         certResolver: letsencrypt
       service: joshua-backend-service
       middlewares:
+        - joshua-debug
         - joshua-strip-prefix
       # Note: WebSocket auth handled by backend, prefix stripped for routing
 
@@ -216,7 +225,7 @@ http:
     joshua-backend-service:
       loadBalancer:
         servers:
-          - url: "http://joshua-backend:8768"
+          - url: "http://joshua-backend:8769"
 
     # Joshua Frontend Service
     joshua-frontend-service:
