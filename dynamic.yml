@@ -16,6 +16,32 @@ http:
           - X-VK-Scopes
           - X-VK-Admin
     
+    # Cookie-only authentication (frontend)
+    vk-cookie-only:
+      forwardAuth:
+        address: "http://voight-kampff:8080/verify"
+        trustForwardHeader: true
+        authRequestHeaders:
+          - Cookie
+        authResponseHeaders:
+          - X-VK-User
+          - X-VK-Service
+          - X-VK-Scopes
+    
+    # API Key-only authentication (services)
+    vk-api-only:
+      forwardAuth:
+        address: "http://voight-kampff:8080/verify"
+        trustForwardHeader: true
+        authRequestHeaders:
+          - Authorization
+          - X-API-Key
+        authResponseHeaders:
+          - X-VK-User
+          - X-VK-Service
+          - X-VK-Scopes
+          - X-VK-Admin
+    
     # Redirect root to landing page
     redirect-to-landing:
       redirectRegex:
@@ -53,7 +79,7 @@ http:
         certResolver: letsencrypt
       service: auth-service
 
-    # vLLM FastAPI - The Brain (protected by hybrid auth)
+    # vLLM FastAPI - The Brain (API key only)
     thebrain:
       rule: "Host(`thebrain.caronboulme.fr`)"
       entryPoints:
@@ -62,9 +88,9 @@ http:
         certResolver: letsencrypt
       service: vllm-service
       middlewares:
-        - vk-hybrid
+        - vk-api-only
 
-    # TTS Service - Unmute Talk (protected by hybrid auth)
+    # TTS Service - Unmute Talk (API key only)
     unmute-talk:
       rule: "Host(`unmute-talk.caronboulme.fr`)"
       entryPoints:
@@ -73,9 +99,9 @@ http:
         certResolver: letsencrypt
       service: tts-service
       middlewares:
-        - vk-hybrid
+        - vk-api-only
 
-    # STT Service - Unmute Transcript (protected by hybrid auth)
+    # STT Service - Unmute Transcript (API key only)
     unmute-transcript:
       rule: "Host(`unmute-transcript.caronboulme.fr`)"
       entryPoints:
@@ -84,9 +110,9 @@ http:
         certResolver: letsencrypt
       service: stt-service
       middlewares:
-        - vk-hybrid
+        - vk-api-only
 
-    # Chatterbox TTS Service (protected by hybrid auth)
+    # Chatterbox TTS Service (API key only)
     chatterbox:
       rule: "Host(`chatterbox.caronboulme.fr`)"
       entryPoints:
@@ -95,9 +121,9 @@ http:
         certResolver: letsencrypt
       service: chatterbox-service
       middlewares:
-        - vk-hybrid
+        - vk-api-only
 
-    # Traefik Dashboard - Admin only (auto-detected by /verify)
+    # Traefik Dashboard - Admin only (hybrid auth for admin detection)
     traefik-dashboard:
       rule: "Host(`traefik.caronboulme.fr`)"
       entryPoints:
@@ -108,7 +134,7 @@ http:
       middlewares:
         - vk-hybrid
 
-    # Joshua Backend API
+    # Joshua Backend API (Cookie + API Key)
     joshua-backend:
       rule: "Host(`joshua.caronboulme.fr`)"
       entryPoints:
@@ -119,7 +145,7 @@ http:
       middlewares:
         - vk-hybrid
 
-    # Joshua Frontend
+    # Joshua Frontend (Cookie only)
     joshua-frontend:
       rule: "Host(`assistant.caronboulme.fr`)"
       entryPoints:
@@ -128,9 +154,9 @@ http:
         certResolver: letsencrypt
       service: joshua-frontend-service
       middlewares:
-        - vk-hybrid
+        - vk-cookie-only
 
-    # Photos Service - Immich (no auth middleware needed, has its own auth)
+    # Photos Service - Immich (no authentication - public access)
     photos:
       rule: "Host(`photos.caronboulme.fr`)"
       entryPoints:
