@@ -48,6 +48,12 @@ http:
         regex: "^https://(www\\.)?caronboulme\\.fr(/.*)?$"
         replacement: "https://assistant.caronboulme.fr${2}"
         permanent: true
+    
+    # Strip /joshua prefix for WebSocket routing
+    joshua-strip-prefix:
+      stripPrefix:
+        prefixes:
+          - "/joshua"
 
   routers:
     # Auth Service - Web Interface
@@ -163,7 +169,9 @@ http:
       tls:
         certResolver: letsencrypt
       service: joshua-backend-service
-      # Note: No middleware - WebSocket auth handled by backend
+      middlewares:
+        - joshua-strip-prefix
+      # Note: WebSocket auth handled by backend, prefix stripped for routing
 
     # Photos Service - Immich (no authentication - public access)
     photos:
