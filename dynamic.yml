@@ -181,12 +181,12 @@ http:
     tts-service:
       loadBalancer:
         servers:
-          - url: "http://tts:8080"
+          - url: "http://unmute-tts-1:8080"
 
     stt-service:
       loadBalancer:
         servers:
-          - url: "http://stt:8080"
+          - url: "http://unmute-stt-1:8080"
 
     # Chatterbox Service
     chatterbox-service:
