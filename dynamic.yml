@@ -42,12 +42,12 @@ http:
           - X-VK-Scopes
           - X-VK-Admin
     
-    # Redirect root to landing page
-    redirect-to-landing:
+    # Redirect www and root domain to assistant
+    redirect-to-assistant:
       redirectRegex:
-        regex: "^https://www\\.caronboulme\\.fr/$"
-        replacement: "https://www.caronboulme.fr/landing"
-        permanent: false
+        regex: "^https://(www\\.)?caronboulme\\.fr(/.*)?$"
+        replacement: "https://assistant.caronboulme.fr${2}"
+        permanent: true
 
   routers:
     # Auth Service - Web Interface
@@ -59,25 +59,26 @@ http:
         certResolver: letsencrypt
       service: auth-service
 
-    # Landing page with conditional redirect
-    www-landing:
-      rule: "Host(`www.caronboulme.fr`) && Path(`/`)"
+    # Redirect root and www domains to assistant
+    root-redirect:
+      rule: "Host(`caronboulme.fr`)"
       entryPoints:
         - websecure
       tls:
         certResolver: letsencrypt
-      service: auth-service
+      service: joshua-frontend-service
       middlewares:
-        - redirect-to-landing
+        - redirect-to-assistant
         
-    # Landing endpoint
-    www-landing-endpoint:
-      rule: "Host(`www.caronboulme.fr`) && Path(`/landing`)"
+    www-redirect:
+      rule: "Host(`www.caronboulme.fr`)"
       entryPoints:
         - websecure
       tls:
         certResolver: letsencrypt
-      service: auth-service
+      service: joshua-frontend-service
+      middlewares:
+        - redirect-to-assistant
 
     # vLLM FastAPI - The Brain (API key only)
     thebrain:
@@ -166,12 +167,6 @@ http:
   services:
     # Auth Service - Voight-Kampff Web Interface
     auth-service:
-      loadBalancer:
-        servers:
-          - url: "http://voight-kampff:8080"
-
-    # Landing Service - Conditional Redirect Page
-    landing-service:
       loadBalancer:
         servers:
           - url: "http://voight-kampff:8080"
