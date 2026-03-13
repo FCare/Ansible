@@ -170,6 +170,17 @@ http:
         certResolver: letsencrypt
       service: photos-service
 
+    # Sesame - Serveur de certificats CA (accès local uniquement)
+    sesame:
+      rule: "Host(`caronboulme.fr`) && PathPrefix(`/cert`)"
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: letsencrypt
+      service: sesame-service
+      middlewares:
+        - local-networks-only
+
   services:
     # Auth Service - Voight-Kampff Web Interface
     auth-service:
@@ -217,3 +228,9 @@ http:
       loadBalancer:
         servers:
           - url: "http://immich_server:2283"
+
+    # Sesame Service - Serveur de certificats CA
+    sesame-service:
+      loadBalancer:
+        servers:
+          - url: "http://sesame:8080"
