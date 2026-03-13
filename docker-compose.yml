@@ -34,3 +34,29 @@ services:
       - "traefik.http.routers.traefik.service=api@internal"
       - "traefik.http.routers.traefik.middlewares=vk-hybrid@file"
 
+  # Sesame - Serveur de certificats CA
+  sesame:
+    build:
+      context: ../Sesame
+      dockerfile: Dockerfile
+    container_name: sesame
+    restart: unless-stopped
+    networks:
+      - ansible
+    environment:
+      - TZ=Europe/Paris
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.sesame.rule=Host(`caronboulme.fr`) && PathPrefix(`/cert`)"
+      - "traefik.http.routers.sesame.entrypoints=websecure"
+      - "traefik.http.routers.sesame.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.sesame.service=sesame-service"
+      - "traefik.http.routers.sesame.middlewares=local-networks-only@file"
+      - "traefik.http.services.sesame-service.loadbalancer.server.port=8080"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8080/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+

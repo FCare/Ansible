@@ -48,6 +48,14 @@ http:
         regex: "^https://(www\\.)?caronboulme\\.fr(/.*)?$"
         replacement: "https://assistant.caronboulme.fr${2}"
         permanent: true
+    
+    # Restriction aux réseaux locaux pour l'endpoint /cert
+    local-networks-only:
+      ipAllowList:
+        sourceRange:
+          - "192.168.1.0/24"
+          - "192.168.2.0/24"
+          - "127.0.0.1/32"
 
   routers:
     # Auth Service - Web Interface
