@@ -181,6 +181,15 @@ http:
       middlewares:
         - local-networks-only
 
+    # Alfred Frontend - Liste Service (no authentication)
+    alfred-frontend:
+      rule: "Host(`liste.caronboulme.fr`)"
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: letsencrypt
+      service: alfred-frontend-service
+
   services:
     # Auth Service - Voight-Kampff Web Interface
     auth-service:
@@ -234,3 +243,9 @@ http:
       loadBalancer:
         servers:
           - url: "http://sesame:8080"
+
+    # Alfred Frontend Service
+    alfred-frontend-service:
+      loadBalancer:
+        servers:
+          - url: "http://alfred-frontend:80"
