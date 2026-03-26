@@ -10,6 +10,7 @@ http:
           - Authorization
           - X-API-Key
           - Cookie
+          - Accept
         authResponseHeaders:
           - X-VK-User
           - X-VK-Service
