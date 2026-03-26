@@ -57,25 +57,11 @@ http:
           - "192.168.2.0/24"
           - "127.0.0.1/32"
     
-    # Redirection intelligente selon le type d'erreur d'authentification
+    # Redirection pour erreurs d'authentification
     auth-redirect:
-      chain:
-        middlewares:
-          - auth-login-redirect
-          - auth-forbidden-redirect
-    
-    # Redirection vers login pour erreurs 401 (non authentifié)
-    auth-login-redirect:
       errors:
         status:
           - "401"
-        service: auth-service
-        query: "/auth/login"
-    
-    # Redirection vers page unauthorized pour erreurs 403 (accès refusé)
-    auth-forbidden-redirect:
-      errors:
-        status:
           - "403"
         service: auth-service
         query: "/auth/unauthorized"
