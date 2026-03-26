@@ -70,7 +70,7 @@ http:
         status:
           - "401"
         service: auth-service
-        query: "/?redirect={{.Request.URL}}"
+        query: "/auth/login"
     
     # Redirection vers page unauthorized pour erreurs 403 (accès refusé)
     auth-forbidden-redirect:
@@ -78,7 +78,7 @@ http:
         status:
           - "403"
         service: auth-service
-        query: "/unauthorized?service={{.Request.Host}}&requested={{.Request.URL}}"
+        query: "/auth/unauthorized"
 
   routers:
     # Auth Service - Web Interface
