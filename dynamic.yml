@@ -57,19 +57,6 @@ http:
           - "192.168.2.0/24"
           - "127.0.0.1/32"
     
-    # Redirection pour erreurs d'authentification
-    auth-redirect:
-      errors:
-        status:
-          - "401-599"
-        service: auth-service
-
-    # Chaîne de middlewares pour Alfred avec authentification et redirection
-    auth-chain:
-      chain:
-        middlewares:
-          - vk-hybrid
-          - auth-redirect
 
   routers:
     # Auth Service - Web Interface
@@ -204,7 +191,7 @@ http:
         certResolver: letsencrypt
       service: alfred-frontend-service
       middlewares:
-        - auth-chain
+        - vk-hybrid
 
   services:
     # Auth Service - Voight-Kampff Web Interface
