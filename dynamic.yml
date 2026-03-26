@@ -253,22 +253,21 @@ http:
       loadBalancer:
         servers:
           - url: "http://immich_server:2283"
-
     # Sesame Service - Serveur de certificats CA
     sesame-service:
       loadBalancer:
         servers:
           - url: "http://sesame:8080"
-# Alfred Frontend Service
-alfred-frontend-service:
-  loadBalancer:
-    servers:
-      - url: "http://alfred-frontend:80"
 
-# Alfred Backend Service
-alfred-backend-service:
-  loadBalancer:
-    servers:
-      - url: "http://alfred-backend:8000"
+    # Alfred Frontend Service
+    alfred-frontend-service:
+      loadBalancer:
+        servers:
+          - url: "http://alfred-frontend:80"
 
+    # Alfred Backend Service
+    alfred-backend-service:
+      loadBalancer:
+        servers:
+          - url: "http://alfred-backend:8000"
 
