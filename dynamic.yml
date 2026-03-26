@@ -181,7 +181,7 @@ http:
       middlewares:
         - local-networks-only
 
-    # Alfred Frontend - Liste Service (no authentication)
+    # Alfred Frontend - Liste Service (hybrid authentication)
     alfred-frontend:
       rule: "Host(`liste.caronboulme.fr`)"
       entryPoints:
@@ -189,6 +189,8 @@ http:
       tls:
         certResolver: letsencrypt
       service: alfred-frontend-service
+      middlewares:
+        - vk-hybrid
 
   services:
     # Auth Service - Voight-Kampff Web Interface
