@@ -194,6 +194,18 @@ http:
       middlewares:
         - vk-hybrid
 
+    # Alfred Backend API - Direct API access
+    alfred-backend:
+      rule: "Host(`liste.caronboulme.fr`) && PathPrefix(`/api/`)"
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: letsencrypt
+      service: alfred-backend-service
+      middlewares:
+        - vk-hybrid
+      priority: 100
+
   services:
     # Auth Service - Voight-Kampff Web Interface
     auth-service:
@@ -247,9 +259,16 @@ http:
       loadBalancer:
         servers:
           - url: "http://sesame:8080"
+# Alfred Frontend Service
+alfred-frontend-service:
+  loadBalancer:
+    servers:
+      - url: "http://alfred-frontend:80"
 
-    # Alfred Frontend Service
-    alfred-frontend-service:
-      loadBalancer:
-        servers:
-          - url: "http://alfred-frontend:80"
+# Alfred Backend Service
+alfred-backend-service:
+  loadBalancer:
+    servers:
+      - url: "http://alfred-backend:8000"
+
+
