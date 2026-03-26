@@ -61,10 +61,15 @@ http:
     auth-redirect:
       errors:
         status:
-          - "401"
-          - "403"
+          - "401-599"
         service: auth-service
-        query: "/auth/unauthorized"
+
+    # Chaîne de middlewares pour Alfred avec authentification et redirection
+    auth-chain:
+      chain:
+        middlewares:
+          - vk-hybrid
+          - auth-redirect
 
   routers:
     # Auth Service - Web Interface
@@ -199,8 +204,7 @@ http:
         certResolver: letsencrypt
       service: alfred-frontend-service
       middlewares:
-        - vk-hybrid
-        - auth-redirect
+        - auth-chain
 
   services:
     # Auth Service - Voight-Kampff Web Interface
